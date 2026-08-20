@@ -1,25 +1,23 @@
 use std::io;
-use std::sync::mpsc;
-use std::thread;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    crossterm,
-    layout::{Constraint, Margin, Rect, Size},
+    DefaultTerminal, Frame, crossterm,
+    layout::{Constraint, Margin, Rect},
     style::{Color, Stylize},
     text::Text,
     widgets::{Block, BorderType::Rounded, Borders, FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder, Theme};
-use ratatui_image::{FilterType::Nearest, Image, Resize, picker::Picker, protocol::Protocol};
+use ratatui_image::Image;
+use tui_slider::{Slider, SliderOrientation, SliderState};
+
+use crate::image::{ColorGrade, ImageHandler};
 
 pub struct App {
-    image: Option<Protocol>,
-    image_rx: mpsc::Receiver<Protocol>,
-    image_tx: mpsc::Sender<Protocol>,
-    loading: bool,
+    image_handler: ImageHandler,
+    hue: SliderState,
+    is_re_render: bool,
     is_file_explorer_visible: bool,
     is_image_selected: bool,
     file_explorer: FileExplorer,
@@ -30,7 +28,6 @@ const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 
 impl App {
     pub fn new() -> Self {
-        let (image_tx, image_rx) = mpsc::channel();
         let theme = Theme::default().add_default_title();
         let mut file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
         file_explorer
@@ -46,16 +43,16 @@ impl App {
                 if keep { Some(file) } else { None }
             })
             .unwrap();
+        let hue_slider = SliderState::new(0.0, 0.0, 360.0);
 
         App {
-            image: None,
-            image_rx: image_rx,
-            image_tx: image_tx,
-            loading: false,
-            exit: false,
+            image_handler: ImageHandler::new(),
+            hue: hue_slider,
+            is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
             file_explorer: file_explorer,
+            exit: false,
         }
     }
 
@@ -64,36 +61,19 @@ impl App {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
             if self.is_image_selected {
-                self.draw_image();
+                let path = self.file_explorer.current().path.clone();
+                self.image_handler.load_from_path(path);
+                self.is_image_selected = false;
             }
-            if let Ok(protocol) = self.image_rx.try_recv() {
-                self.image = Some(protocol);
-                self.loading = false;
+            if self.is_re_render && self.image_handler.has_source() {
+                self.image_handler.apply_effects(ColorGrade {
+                    hue_degrees: self.hue.value() as f32,
+                });
+                self.is_re_render = false;
             }
+            self.image_handler.poll();
         }
         Ok(())
-    }
-
-    fn draw_image(&mut self) {
-        let tx = self.image_tx.clone();
-        let picker = Picker::from_query_stdio().unwrap();
-        let img_path = self.file_explorer.current().path.clone();
-        self.loading = true;
-        thread::spawn(move || {
-            let dyn_img = image::ImageReader::open(img_path)
-                .unwrap()
-                .decode()
-                .unwrap();
-
-            let target_size = Size::new(60, 30);
-
-            let image_protocol = picker
-                .new_protocol(dyn_img, target_size, Resize::Fit(Some(Nearest)))
-                .unwrap();
-
-            tx.send(image_protocol).unwrap();
-        });
-        self.is_image_selected = false;
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -104,12 +84,13 @@ impl App {
                     self.handle_key_event(key_event)
                 }
                 _ => {}
-            };
+            }
 
             if self.is_file_explorer_visible {
                 self.file_explorer.handle(&event)?;
             }
         }
+
         Ok(())
     }
 
@@ -123,58 +104,75 @@ impl App {
                     self.is_file_explorer_visible = false;
                 }
             }
+            KeyCode::Up => {
+                self.hue.increase(1.0);
+                self.is_re_render = true;
+            }
+            KeyCode::Down => {
+                self.hue.decrease(1.0);
+                self.is_re_render = true;
+            }
             _ => {}
         }
     }
+
     fn draw(&self, frame: &mut Frame) {
         if self.is_file_explorer_visible {
             frame.render_widget_ref(self.file_explorer.widget(), frame.area());
-        } else {
-            frame.render_widget(self, frame.area());
+            return;
         }
-    }
-    fn exit(&mut self) {
-        self.exit = true;
-    }
-}
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+        let area = frame.area();
+
         let image_area = Rect {
             x: area.x,
             y: area.y,
             width: 62,
-            height: 32,
+            height: 30,
         };
 
-        if let Some(image) = self.image.as_ref() {
-            Image::new(image).allow_clipping(true).render(
-                image_area.inner(Margin::new(1, 1)).centered(
-                    Constraint::Length(image.size().width),
-                    Constraint::Length(image.size().height),
-                ),
-                buf,
-            );
+        let slider_area = Rect {
+            x: area.x + image_area.width + 1,
+            y: area.y,
+            width: 60,
+            height: 28,
+        };
+
+        if let Some(protocol) = self.image_handler.protocol.as_ref() {
+            Image::new(protocol).render(image_area.inner(Margin::new(1, 1)), frame.buffer_mut());
         }
-        if self.image.is_none() && !self.loading {
+
+        if self.image_handler.protocol.is_none() && !self.image_handler.loading {
             Text::from("Select an image with 'f' to open file explorer.")
                 .fg(Color::DarkGray)
                 .render(
                     image_area.centered(Constraint::Length(47), Constraint::Length(1)),
-                    buf,
+                    frame.buffer_mut(),
                 );
         }
+
         // TODO: add loading animation, instead of plain text.
-        if self.loading {
+        if self.image_handler.loading {
             Text::from("Loading...").fg(Color::DarkGray).render(
                 image_area.centered(Constraint::Length(10), Constraint::Length(1)),
-                buf,
+                frame.buffer_mut(),
             );
         }
+
         Block::default()
             .title("Image")
             .borders(Borders::ALL)
             .border_type(Rounded)
-            .render(image_area, buf);
+            .render(image_area, frame.buffer_mut());
+
+        let slider = Slider::from_state(&self.hue)
+            .orientation(SliderOrientation::Vertical)
+            .label("Hue")
+            .show_value(true);
+        slider.render(slider_area, frame.buffer_mut());
+    }
+
+    fn exit(&mut self) {
+        self.exit = true;
     }
 }

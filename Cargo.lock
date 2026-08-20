@@ -335,6 +335,8 @@ dependencies = [
  "ratatui",
  "ratatui-explorer",
  "ratatui-image",
+ "rayon",
+ "tui-slider",
 ]
 
 [[package]]
@@ -2563,6 +2565,17 @@ dependencies = [
  "sharded-slab",
  "thread_local",
  "tracing-core",
+]
+
+[[package]]
+name = "tui-slider"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd89f5a52d888c8d183dc93493440ff7e45e27274b98ef5404a66ff1c8b07b21"
+dependencies = [
+ "crossterm",
+ "ratatui",
+ "unicode-width",
 ]
 
 [[package]]
