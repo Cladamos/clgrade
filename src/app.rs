@@ -3,20 +3,21 @@ use std::io;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame, crossterm,
-    layout::{Constraint, Margin, Rect},
-    style::{Color, Stylize},
+    layout::{Constraint, Direction, Layout, Margin, Rect, Size},
+    style::{Color, Modifier, Style, Stylize},
     text::Text,
     widgets::{Block, BorderType::Rounded, Borders, FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder, Theme};
 use ratatui_image::Image;
-use tui_slider::{Slider, SliderOrientation, SliderState};
+use tui_slider::{Slider, SliderOrientation, SliderState, style::SliderStyle};
 
 use crate::image::{ColorGrade, ImageHandler};
 
 pub struct App {
     image_handler: ImageHandler,
-    hue: SliderState,
+    sliders: Vec<SliderData>,
+    selected_slider_index: usize,
     is_re_render: bool,
     is_file_explorer_visible: bool,
     is_image_selected: bool,
@@ -24,10 +25,54 @@ pub struct App {
     exit: bool,
 }
 
+struct SliderData {
+    label: String,
+    state: SliderState,
+    step: f64,
+    style: SliderStyle,
+    is_selected: bool,
+}
 const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 
 impl App {
     pub fn new() -> Self {
+        let sliders: Vec<SliderData> = vec![
+            SliderData {
+                label: "Temp".to_string(),
+                state: SliderState::new(0.0, -100.0, 100.0),
+                step: 5.0,
+                style: SliderStyle::vertical(),
+                is_selected: true,
+            },
+            SliderData {
+                label: "Exp".to_string(),
+                state: SliderState::new(0.0, -3.0, 3.0),
+                step: 0.1,
+                style: SliderStyle::vertical(),
+                is_selected: false,
+            },
+            SliderData {
+                label: "Cont".to_string(),
+                state: SliderState::new(0.0, -100.0, 100.0),
+                step: 5.0,
+                style: SliderStyle::vertical(),
+                is_selected: false,
+            },
+            SliderData {
+                label: "Sat".to_string(),
+                state: SliderState::new(1.0, 0.0, 2.0),
+                step: 0.1,
+                style: SliderStyle::vertical(),
+                is_selected: false,
+            },
+            SliderData {
+                label: "Hue".to_string(),
+                state: SliderState::new(0.0, -180.0, 180.0),
+                step: 5.0,
+                style: SliderStyle::vertical(),
+                is_selected: false,
+            },
+        ];
         let theme = Theme::default().add_default_title();
         let mut file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
         file_explorer
@@ -43,11 +88,11 @@ impl App {
                 if keep { Some(file) } else { None }
             })
             .unwrap();
-        let hue_slider = SliderState::new(0.0, 0.0, 360.0);
 
         App {
             image_handler: ImageHandler::new(),
-            hue: hue_slider,
+            sliders,
+            selected_slider_index: 0,
             is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
@@ -67,7 +112,7 @@ impl App {
             }
             if self.is_re_render && self.image_handler.has_source() {
                 self.image_handler.apply_effects(ColorGrade {
-                    hue_degrees: self.hue.value() as f32,
+                    hue_degrees: self.sliders[4].state.value() as f32,
                 });
                 self.is_re_render = false;
             }
@@ -104,12 +149,19 @@ impl App {
                     self.is_file_explorer_visible = false;
                 }
             }
+            KeyCode::Tab => {
+                self.sliders[self.selected_slider_index].is_selected = false;
+                self.selected_slider_index = (self.selected_slider_index + 1) % self.sliders.len();
+                self.sliders[self.selected_slider_index].is_selected = true;
+            }
             KeyCode::Up => {
-                self.hue.increase(1.0);
+                let s = &mut self.sliders[self.selected_slider_index];
+                s.state.increase(s.step);
                 self.is_re_render = true;
             }
             KeyCode::Down => {
-                self.hue.decrease(1.0);
+                let s = &mut self.sliders[self.selected_slider_index];
+                s.state.decrease(s.step);
                 self.is_re_render = true;
             }
             _ => {}
@@ -124,18 +176,25 @@ impl App {
 
         let area = frame.area();
 
+        let image_size = self
+            .image_handler
+            .protocol
+            .as_ref()
+            .map(|p| p.size())
+            .unwrap_or(Size::new(60, 28));
+
         let image_area = Rect {
             x: area.x,
             y: area.y,
-            width: 62,
-            height: 30,
+            width: image_size.width + 2,
+            height: image_size.height + 2,
         };
 
         let slider_area = Rect {
-            x: area.x + image_area.width + 1,
-            y: area.y,
-            width: 60,
-            height: 28,
+            x: area.x,
+            y: area.y + image_area.height + 2,
+            width: area.width,
+            height: 10,
         };
 
         if let Some(protocol) = self.image_handler.protocol.as_ref() {
@@ -165,11 +224,65 @@ impl App {
             .border_type(Rounded)
             .render(image_area, frame.buffer_mut());
 
-        let slider = Slider::from_state(&self.hue)
-            .orientation(SliderOrientation::Vertical)
-            .label("Hue")
-            .show_value(true);
-        slider.render(slider_area, frame.buffer_mut());
+        // TODO: make it responsive for terminal resize.
+        // TODO: add horizontal split option
+        let slider_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![
+                Constraint::Length(15),
+                Constraint::Length(15),
+                Constraint::Length(15),
+                Constraint::Length(15),
+                Constraint::Length(15),
+            ])
+            .split(slider_area);
+
+        self.sliders.iter().enumerate().for_each(|(index, slider)| {
+            Block::default()
+                .title(ratatui::text::Line::from(vec![
+                    ratatui::text::Span::styled(
+                        slider.label.clone(),
+                        if slider.is_selected {
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::DarkGray)
+                        },
+                    ),
+                ]))
+                .borders(Borders::ALL)
+                .border_type(Rounded)
+                .border_style(if slider.is_selected {
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                })
+                .render(slider_layout[index], frame.buffer_mut());
+            Slider::from_state(&slider.state)
+                .orientation(SliderOrientation::Vertical)
+                .filled_symbol(slider.style.filled_symbol)
+                .handle_symbol(slider.style.handle_symbol)
+                .empty_symbol(slider.style.empty_symbol)
+                .filled_color(if slider.is_selected {
+                    Color::Blue
+                } else {
+                    Color::Gray
+                })
+                .handle_color(if slider.is_selected {
+                    Color::Blue
+                } else {
+                    Color::Gray
+                })
+                .empty_color(Color::DarkGray)
+                .show_value(true)
+                .render(
+                    slider_layout[index].inner(Margin::new(1, 2)),
+                    frame.buffer_mut(),
+                );
+        });
     }
 
     fn exit(&mut self) {
