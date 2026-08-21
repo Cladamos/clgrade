@@ -1,28 +1,52 @@
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
+use std::{
+    path::PathBuf,
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
 
 use image::{DynamicImage, RgbaImage};
 use ratatui::layout::Size;
 use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 use rayon::prelude::*;
 
+// In later I may want to make these configurable
 const PREVIEW_MAX_DIM: u32 = 840;
 const PROXY_MAX_DIM: u32 = 420;
 const TARGET_SIZE: Size = Size::new(60, 28);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorGrade {
-    pub hue_degrees: f32,
+    pub temperature: f32, // -100.0 to 100.0
+    pub exposure: f32,    // -3.0 to 3.0
+    pub contrast: f32,    // -100.0 to 100.0
+    pub saturation: f32,  // 0.0 to 2.0
+    pub hue_degrees: f32, // -180.0 to 180.0
+}
+
+impl Default for ColorGrade {
+    fn default() -> Self {
+        ColorGrade {
+            temperature: 0.0,
+            exposure: 0.0,
+            contrast: 0.0,
+            saturation: 1.0,
+            hue_degrees: 0.0,
+        }
+    }
 }
 
 impl ColorGrade {
     pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage) {
+        //TODO: investigate math in here and come back to check it
+
+        let exp_mult = 2.0_f32.powf(self.exposure);
+
+        let cont_factor = (259.0 * (self.contrast + 255.0)) / (255.0 * (259.0 - self.contrast));
+
         let radians = self.hue_degrees.to_radians();
         let cos_a = radians.cos();
         let sin_a = radians.sin();
-
         let hue_mat = [
             0.213 + 0.787 * cos_a - 0.213 * sin_a,
             0.715 - 0.715 * cos_a - 0.715 * sin_a,
@@ -39,17 +63,47 @@ impl ColorGrade {
             .par_pixels_mut()
             .zip(source.par_pixels())
             .for_each(|(w_px, s_px)| {
-                let r = s_px[0] as f32;
-                let g = s_px[1] as f32;
-                let b = s_px[2] as f32;
+                let mut r = s_px[0] as f32;
+                let mut g = s_px[1] as f32;
+                let mut b = s_px[2] as f32;
 
-                w_px[0] =
-                    (r * hue_mat[0] + g * hue_mat[1] + b * hue_mat[2]).clamp(0.0, 255.0) as u8;
-                w_px[1] =
-                    (r * hue_mat[3] + g * hue_mat[4] + b * hue_mat[5]).clamp(0.0, 255.0) as u8;
-                w_px[2] =
-                    (r * hue_mat[6] + g * hue_mat[7] + b * hue_mat[8]).clamp(0.0, 255.0) as u8;
-                w_px[3] = s_px[3];
+                // White Balance (Temperature)
+                r += self.temperature;
+                b -= self.temperature;
+
+                // Exposure
+                r *= exp_mult;
+                g *= exp_mult;
+                b *= exp_mult;
+
+                // Contrast
+                r = cont_factor * (r - 128.0) + 128.0;
+                g = cont_factor * (g - 128.0) + 128.0;
+                b = cont_factor * (b - 128.0) + 128.0;
+
+                // Hue Rotation
+                if self.hue_degrees != 0.0 {
+                    let hr = r * hue_mat[0] + g * hue_mat[1] + b * hue_mat[2];
+                    let hg = r * hue_mat[3] + g * hue_mat[4] + b * hue_mat[5];
+                    let hb = r * hue_mat[6] + g * hue_mat[7] + b * hue_mat[8];
+                    r = hr;
+                    g = hg;
+                    b = hb;
+                }
+
+                // Saturation
+                if self.saturation != 1.0 {
+                    // Rec. 709 Luminance weights
+                    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    r = lum + (r - lum) * self.saturation;
+                    g = lum + (g - lum) * self.saturation;
+                    b = lum + (b - lum) * self.saturation;
+                }
+
+                w_px[0] = r.clamp(0.0, 255.0) as u8;
+                w_px[1] = g.clamp(0.0, 255.0) as u8;
+                w_px[2] = b.clamp(0.0, 255.0) as u8;
+                w_px[3] = s_px[3]; // alpha
             });
     }
 }
@@ -72,7 +126,7 @@ impl ImageHandler {
             protocol: None,
             image_path: None,
             loading: false,
-            grade: ColorGrade { hue_degrees: 0.0 },
+            grade: ColorGrade::default(),
             grade_tx: None,
             protocol_rx: None,
             picker,
@@ -97,7 +151,7 @@ impl ImageHandler {
 
         self.image_path = Some(path.clone());
         self.loading = true;
-        self.grade = ColorGrade { hue_degrees: 0.0 };
+        self.grade = ColorGrade::default();
 
         let (grade_tx, grade_rx) = mpsc::channel::<ColorGrade>();
         let (protocol_tx, protocol_rx) = mpsc::channel::<Protocol>();
@@ -133,10 +187,12 @@ impl ImageHandler {
                 return;
             }
 
-            let mut last_grade = ColorGrade { hue_degrees: 0.0 };
+            let mut last_grade = ColorGrade::default();
             let mut is_dragging = false;
             let timeout = Duration::from_millis(200);
 
+            let frame_throttle = Duration::from_millis(16);
+            let mut last_render_time = Instant::now();
             loop {
                 let mut grade = if is_dragging {
                     match grade_rx.recv_timeout(timeout) {
@@ -149,7 +205,7 @@ impl ImageHandler {
                                 .new_protocol(
                                     DynamicImage::ImageRgba8(working_high),
                                     TARGET_SIZE,
-                                    Resize::Fit(Some(Nearest)),
+                                    Resize::Scale(Some(Nearest)),
                                 )
                                 .unwrap();
                             if protocol_tx.send(protocol).is_err() {
@@ -173,7 +229,11 @@ impl ImageHandler {
                 last_grade = grade;
                 is_dragging = true;
 
+                if last_render_time.elapsed() < frame_throttle {
+                    continue;
+                }
                 grade.apply(&source_proxy, &mut working_proxy);
+
                 let protocol = picker
                     .new_protocol(
                         DynamicImage::ImageRgba8(working_proxy.clone()),
@@ -181,6 +241,7 @@ impl ImageHandler {
                         Resize::Scale(Some(Nearest)),
                     )
                     .unwrap();
+                last_render_time = Instant::now();
 
                 if protocol_tx.send(protocol).is_err() {
                     break;
@@ -194,9 +255,5 @@ impl ImageHandler {
         if let Some(ref tx) = self.grade_tx {
             let _ = tx.send(grade);
         }
-    }
-
-    pub fn has_source(&self) -> bool {
-        self.protocol.is_some() || self.loading
     }
 }

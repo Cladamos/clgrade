@@ -26,51 +26,62 @@ pub struct App {
 }
 
 struct SliderData {
-    label: String,
+    label: &'static str,
     state: SliderState,
     step: f64,
-    style: SliderStyle,
-    is_selected: bool,
+    slider_style: SliderStyle,
 }
+
+impl SliderData {
+    fn style(&self, selected: bool) -> Style {
+        if selected {
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        }
+    }
+
+    fn color(&self, selected: bool) -> Color {
+        if selected { Color::Blue } else { Color::Gray }
+    }
+}
+
 const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 
 impl App {
     pub fn new() -> Self {
         let sliders: Vec<SliderData> = vec![
             SliderData {
-                label: "Temp".to_string(),
+                label: "Temp",
                 state: SliderState::new(0.0, -100.0, 100.0),
-                step: 5.0,
-                style: SliderStyle::vertical(),
-                is_selected: true,
+                step: 1.0,
+                slider_style: SliderStyle::vertical(),
             },
             SliderData {
-                label: "Exp".to_string(),
+                label: "Exp",
                 state: SliderState::new(0.0, -3.0, 3.0),
-                step: 0.1,
-                style: SliderStyle::vertical(),
-                is_selected: false,
+                step: 0.05,
+                slider_style: SliderStyle::vertical(),
             },
             SliderData {
-                label: "Cont".to_string(),
+                label: "Cont",
                 state: SliderState::new(0.0, -100.0, 100.0),
-                step: 5.0,
-                style: SliderStyle::vertical(),
-                is_selected: false,
+                step: 1.0,
+                slider_style: SliderStyle::vertical(),
             },
             SliderData {
-                label: "Sat".to_string(),
+                label: "Sat",
                 state: SliderState::new(1.0, 0.0, 2.0),
-                step: 0.1,
-                style: SliderStyle::vertical(),
-                is_selected: false,
+                step: 0.01,
+                slider_style: SliderStyle::vertical(),
             },
             SliderData {
-                label: "Hue".to_string(),
+                label: "Hue",
                 state: SliderState::new(0.0, -180.0, 180.0),
-                step: 5.0,
-                style: SliderStyle::vertical(),
-                is_selected: false,
+                step: 2.0,
+                slider_style: SliderStyle::vertical(),
             },
         ];
         let theme = Theme::default().add_default_title();
@@ -96,7 +107,7 @@ impl App {
             is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
-            file_explorer: file_explorer,
+            file_explorer,
             exit: false,
         }
     }
@@ -110,8 +121,12 @@ impl App {
                 self.image_handler.load_from_path(path);
                 self.is_image_selected = false;
             }
-            if self.is_re_render && self.image_handler.has_source() {
+            if self.is_re_render && self.image_handler.protocol.is_some() {
                 self.image_handler.apply_effects(ColorGrade {
+                    temperature: self.sliders[0].state.value() as f32,
+                    exposure: self.sliders[1].state.value() as f32,
+                    contrast: self.sliders[2].state.value() as f32,
+                    saturation: self.sliders[3].state.value() as f32,
                     hue_degrees: self.sliders[4].state.value() as f32,
                 });
                 self.is_re_render = false;
@@ -144,15 +159,13 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('f') => self.is_file_explorer_visible = !self.is_file_explorer_visible,
             KeyCode::Enter => {
-                if self.is_file_explorer_visible && self.file_explorer.current().is_dir == false {
+                if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
                     self.is_image_selected = true;
                     self.is_file_explorer_visible = false;
                 }
             }
             KeyCode::Tab => {
-                self.sliders[self.selected_slider_index].is_selected = false;
                 self.selected_slider_index = (self.selected_slider_index + 1) % self.sliders.len();
-                self.sliders[self.selected_slider_index].is_selected = true;
             }
             KeyCode::Up => {
                 let s = &mut self.sliders[self.selected_slider_index];
@@ -228,61 +241,33 @@ impl App {
         // TODO: add horizontal split option
         let slider_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(vec![
-                Constraint::Length(15),
-                Constraint::Length(15),
-                Constraint::Length(15),
-                Constraint::Length(15),
-                Constraint::Length(15),
-            ])
+            .constraints(self.sliders.iter().map(|_| Constraint::Length(15)))
             .split(slider_area);
 
-        self.sliders.iter().enumerate().for_each(|(index, slider)| {
+        for (index, slider) in self.sliders.iter().enumerate() {
+            let is_selected = index == self.selected_slider_index;
             Block::default()
                 .title(ratatui::text::Line::from(vec![
-                    ratatui::text::Span::styled(
-                        slider.label.clone(),
-                        if slider.is_selected {
-                            Style::default()
-                                .fg(Color::Blue)
-                                .add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(Color::DarkGray)
-                        },
-                    ),
+                    ratatui::text::Span::styled(slider.label, slider.style(is_selected)),
                 ]))
                 .borders(Borders::ALL)
                 .border_type(Rounded)
-                .border_style(if slider.is_selected {
-                    Style::default()
-                        .fg(Color::Blue)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                })
+                .border_style(slider.style(is_selected))
                 .render(slider_layout[index], frame.buffer_mut());
             Slider::from_state(&slider.state)
                 .orientation(SliderOrientation::Vertical)
-                .filled_symbol(slider.style.filled_symbol)
-                .handle_symbol(slider.style.handle_symbol)
-                .empty_symbol(slider.style.empty_symbol)
-                .filled_color(if slider.is_selected {
-                    Color::Blue
-                } else {
-                    Color::Gray
-                })
-                .handle_color(if slider.is_selected {
-                    Color::Blue
-                } else {
-                    Color::Gray
-                })
+                .filled_symbol(slider.slider_style.filled_symbol)
+                .handle_symbol(slider.slider_style.handle_symbol)
+                .empty_symbol(slider.slider_style.empty_symbol)
+                .filled_color(slider.color(is_selected))
+                .handle_color(slider.color(is_selected))
                 .empty_color(Color::DarkGray)
                 .show_value(true)
                 .render(
                     slider_layout[index].inner(Margin::new(1, 2)),
                     frame.buffer_mut(),
                 );
-        });
+        }
     }
 
     fn exit(&mut self) {
