@@ -1,5 +1,7 @@
 mod app;
 mod image;
+mod ui;
+
 use app::App;
 use color_eyre::Result;
 

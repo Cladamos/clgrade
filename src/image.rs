@@ -11,9 +11,9 @@ use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Proto
 use rayon::prelude::*;
 
 // In later I may want to make these configurable
-const PREVIEW_MAX_DIM: u32 = 840;
-const PROXY_MAX_DIM: u32 = 420;
-const TARGET_SIZE: Size = Size::new(60, 28);
+const PREVIEW_MAX_DIM: u32 = 720;
+const PROXY_MAX_DIM: u32 = 360;
+const TARGET_SIZE: Size = Size::new(52, 24);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorGrade {

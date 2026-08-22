@@ -1,18 +1,18 @@
-use std::io;
-
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame, crossterm,
-    layout::{Constraint, Direction, Layout, Margin, Rect, Size},
-    style::{Color, Modifier, Style, Stylize},
+    layout::{Rect, Size},
     text::Text,
-    widgets::{Block, BorderType::Rounded, Borders, FrameExt, Widget},
+    widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder, Theme};
-use ratatui_image::Image;
-use tui_slider::{Slider, SliderOrientation, SliderState, style::SliderStyle};
+use std::io;
+use tui_slider::{SliderState, style::SliderStyle};
 
-use crate::image::{ColorGrade, ImageHandler};
+use crate::{
+    image::{ColorGrade, ImageHandler},
+    ui::{CenterOpts, centered_rect, image::ImageSection, slider::SliderSection},
+};
 
 pub struct App {
     image_handler: ImageHandler,
@@ -25,27 +25,11 @@ pub struct App {
     exit: bool,
 }
 
-struct SliderData {
-    label: &'static str,
-    state: SliderState,
-    step: f64,
-    slider_style: SliderStyle,
-}
-
-impl SliderData {
-    fn style(&self, selected: bool) -> Style {
-        if selected {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        }
-    }
-
-    fn color(&self, selected: bool) -> Color {
-        if selected { Color::Blue } else { Color::Gray }
-    }
+pub struct SliderData {
+    pub label: &'static str,
+    pub state: SliderState,
+    pub step: f64,
+    pub slider_style: SliderStyle,
 }
 
 const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
@@ -182,92 +166,52 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
+        let area = frame.area();
         if self.is_file_explorer_visible {
-            frame.render_widget_ref(self.file_explorer.widget(), frame.area());
+            frame.render_widget_ref(self.file_explorer.widget(), area);
             return;
         }
-
-        let area = frame.area();
+        if area.height < 35 {
+            frame.render_widget(Text::from("Terminal is too small"), area);
+            return;
+        }
 
         let image_size = self
             .image_handler
             .protocol
             .as_ref()
             .map(|p| p.size())
-            .unwrap_or(Size::new(60, 28));
+            .unwrap_or(Size::new(52, 24));
 
-        let image_area = Rect {
-            x: area.x,
-            y: area.y,
-            width: image_size.width + 2,
-            height: image_size.height + 2,
-        };
+        let image_area = centered_rect(
+            CenterOpts {
+                width: image_size.width + 2,
+                height: image_size.height + 2,
+                margin: 0,
+            },
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: image_size.height + 2,
+            },
+        );
 
-        let slider_area = Rect {
-            x: area.x,
-            y: area.y + image_area.height + 2,
-            width: area.width,
-            height: 10,
-        };
+        let slider_height = area.height - image_area.bottom() - 2;
+        let slider_area = centered_rect(
+            CenterOpts {
+                //TODO: slider width with constant if you change in ui/slider.rs you need to change here too. fix it
+                width: (self.sliders.len() * 15) as u16,
+                height: slider_height,
+                margin: 0,
+            },
+            Rect::new(area.x, image_area.bottom() + 1, area.width, slider_height),
+        );
+        let slider_section = SliderSection::new(&self.sliders, self.selected_slider_index);
+        slider_section.render(slider_area, frame.buffer_mut());
 
-        if let Some(protocol) = self.image_handler.protocol.as_ref() {
-            Image::new(protocol).render(image_area.inner(Margin::new(1, 1)), frame.buffer_mut());
-        }
-
-        if self.image_handler.protocol.is_none() && !self.image_handler.loading {
-            Text::from("Select an image with 'f' to open file explorer.")
-                .fg(Color::DarkGray)
-                .render(
-                    image_area.centered(Constraint::Length(47), Constraint::Length(1)),
-                    frame.buffer_mut(),
-                );
-        }
-
-        // TODO: add loading animation, instead of plain text.
-        if self.image_handler.loading {
-            Text::from("Loading...").fg(Color::DarkGray).render(
-                image_area.centered(Constraint::Length(10), Constraint::Length(1)),
-                frame.buffer_mut(),
-            );
-        }
-
-        Block::default()
-            .title("Image")
-            .borders(Borders::ALL)
-            .border_type(Rounded)
-            .render(image_area, frame.buffer_mut());
-
-        // TODO: make it responsive for terminal resize.
-        // TODO: add horizontal split option
-        let slider_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(self.sliders.iter().map(|_| Constraint::Length(15)))
-            .split(slider_area);
-
-        for (index, slider) in self.sliders.iter().enumerate() {
-            let is_selected = index == self.selected_slider_index;
-            Block::default()
-                .title(ratatui::text::Line::from(vec![
-                    ratatui::text::Span::styled(slider.label, slider.style(is_selected)),
-                ]))
-                .borders(Borders::ALL)
-                .border_type(Rounded)
-                .border_style(slider.style(is_selected))
-                .render(slider_layout[index], frame.buffer_mut());
-            Slider::from_state(&slider.state)
-                .orientation(SliderOrientation::Vertical)
-                .filled_symbol(slider.slider_style.filled_symbol)
-                .handle_symbol(slider.slider_style.handle_symbol)
-                .empty_symbol(slider.slider_style.empty_symbol)
-                .filled_color(slider.color(is_selected))
-                .handle_color(slider.color(is_selected))
-                .empty_color(Color::DarkGray)
-                .show_value(true)
-                .render(
-                    slider_layout[index].inner(Margin::new(1, 2)),
-                    frame.buffer_mut(),
-                );
-        }
+        let image_section = ImageSection::new(&self.image_handler);
+        image_section.render(image_area, frame.buffer_mut());
     }
 
     fn exit(&mut self) {
