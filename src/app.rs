@@ -28,6 +28,7 @@ pub struct App {
     selected_resolution_index: usize,
 
     is_show_original: bool,
+    is_original: bool,
     is_re_render: bool,
     is_file_explorer_visible: bool,
     is_image_selected: bool,
@@ -110,6 +111,7 @@ impl App {
             selected_resolution_index: 1,
 
             is_show_original: false,
+            is_original: false,
             is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
@@ -127,7 +129,7 @@ impl App {
                 self.is_image_selected = false;
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
-                if self.is_show_original {
+                if self.is_show_original && !self.is_original {
                     self.image_handler.apply_effects(ColorGrade {
                         temperature: 0.0,
                         exposure: 0.0,
@@ -135,7 +137,9 @@ impl App {
                         saturation: 1.0,
                         hue_degrees: 0.0,
                     });
-                } else {
+                    self.is_original = true;
+                }
+                if !self.is_show_original {
                     self.image_handler.apply_effects(ColorGrade {
                         temperature: self.sliders[0].state.value() as f32,
                         exposure: self.sliders[1].state.value() as f32,
@@ -237,6 +241,7 @@ impl App {
                 }
                 if key_event.kind == KeyEventKind::Release {
                     self.is_show_original = false;
+                    self.is_original = false;
                     self.is_re_render = true;
                 }
             }
