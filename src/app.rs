@@ -15,17 +15,22 @@ use crate::{
 
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
+// const PAGES: [&str; 2] = ["wheels", "sliders"];
 
 pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
+    file_explorer: FileExplorer,
+
+    // page_index: usize,
     selected_slider_index: usize,
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
+
+    is_show_original: bool,
     is_re_render: bool,
     is_file_explorer_visible: bool,
     is_image_selected: bool,
-    file_explorer: FileExplorer,
     exit: bool,
 }
 
@@ -34,6 +39,7 @@ pub struct SliderData {
     pub state: SliderState,
     pub step: f64,
     pub slider_style: SliderStyle,
+    pub default_value: f64,
 }
 
 const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
@@ -46,30 +52,35 @@ impl App {
                 state: SliderState::new(0.0, -100.0, 100.0),
                 step: 1.0,
                 slider_style: SliderStyle::vertical(),
+                default_value: 0.0,
             },
             SliderData {
                 label: "Exp",
                 state: SliderState::new(0.0, -3.0, 3.0),
                 step: 0.05,
                 slider_style: SliderStyle::vertical(),
+                default_value: 0.0,
             },
             SliderData {
                 label: "Cont",
                 state: SliderState::new(0.0, -100.0, 100.0),
                 step: 1.0,
                 slider_style: SliderStyle::vertical(),
+                default_value: 0.0,
             },
             SliderData {
                 label: "Sat",
                 state: SliderState::new(1.0, 0.0, 2.0),
                 step: 0.05,
                 slider_style: SliderStyle::vertical(),
+                default_value: 1.0,
             },
             SliderData {
                 label: "Hue",
                 state: SliderState::new(0.0, -180.0, 180.0),
                 step: 2.0,
                 slider_style: SliderStyle::vertical(),
+                default_value: 0.0,
             },
         ];
         let theme = Theme::default().add_default_title();
@@ -91,13 +102,17 @@ impl App {
         App {
             image_handler: ImageHandler::new(),
             sliders,
+            file_explorer,
+
+            // page_index: 0,
             selected_slider_index: 0,
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 1,
+
+            is_show_original: false,
             is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
-            file_explorer,
             exit: false,
         }
     }
@@ -112,13 +127,23 @@ impl App {
                 self.is_image_selected = false;
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
-                self.image_handler.apply_effects(ColorGrade {
-                    temperature: self.sliders[0].state.value() as f32,
-                    exposure: self.sliders[1].state.value() as f32,
-                    contrast: self.sliders[2].state.value() as f32,
-                    saturation: self.sliders[3].state.value() as f32,
-                    hue_degrees: self.sliders[4].state.value() as f32,
-                });
+                if self.is_show_original {
+                    self.image_handler.apply_effects(ColorGrade {
+                        temperature: 0.0,
+                        exposure: 0.0,
+                        contrast: 0.0,
+                        saturation: 1.0,
+                        hue_degrees: 0.0,
+                    });
+                } else {
+                    self.image_handler.apply_effects(ColorGrade {
+                        temperature: self.sliders[0].state.value() as f32,
+                        exposure: self.sliders[1].state.value() as f32,
+                        contrast: self.sliders[2].state.value() as f32,
+                        saturation: self.sliders[3].state.value() as f32,
+                        hue_degrees: self.sliders[4].state.value() as f32,
+                    });
+                }
                 self.is_re_render = false;
             }
             self.image_handler.poll();
@@ -130,9 +155,16 @@ impl App {
         if event::poll(std::time::Duration::from_millis(16))? {
             let event = event::read()?;
             match event {
-                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press ||  key_event.kind == KeyEventKind::Repeat => {
                     self.handle_key_event(key_event)
                 }
+                Event::Key(key_event)
+                    // I have not any other events to have release action so I am checking the space bar over here
+                    // I can write the space bar release action in here,
+                    // but inside of handle_key_event function it look better
+                    if key_event.kind == KeyEventKind::Release && key_event.code == KeyCode::Char(' ') => {
+                        self.handle_key_event(key_event)
+                    }
                 _ => {}
             }
 
@@ -187,7 +219,27 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-
+            KeyCode::Char('r') => {
+                let s = &mut self.sliders[self.selected_slider_index];
+                s.state.set_value(s.default_value);
+                self.is_re_render = true;
+            }
+            KeyCode::Char('R') => {
+                self.sliders
+                    .iter_mut()
+                    .for_each(|s| s.state.set_value(s.default_value));
+                self.is_re_render = true;
+            }
+            KeyCode::Char(' ') => {
+                if key_event.kind == KeyEventKind::Press {
+                    self.is_show_original = true;
+                    self.is_re_render = true;
+                }
+                if key_event.kind == KeyEventKind::Release {
+                    self.is_show_original = false;
+                    self.is_re_render = true;
+                }
+            }
             _ => {}
         }
     }
