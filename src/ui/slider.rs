@@ -1,8 +1,9 @@
 use crate::app::SliderData;
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Modifier, Style},
+    text::Text,
     widgets::{Block, BorderType::Rounded, Borders, Widget},
 };
 use tui_slider::{Slider, SliderOrientation};
@@ -14,7 +15,7 @@ impl SliderData {
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::Gray)
         }
     }
 
@@ -42,25 +43,30 @@ impl<'a> Widget for SliderSection<'a> {
         let slider_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(self.sliders.iter().map(|_| Constraint::Length(15)))
-            .split(area);
+            .split(if area.height > 15 {
+                Rect { height: 15, ..area }
+            } else {
+                area
+            });
 
         for (index, slider) in self.sliders.iter().enumerate() {
             let is_selected = index == self.selected_index;
 
-            // Render border box
             Block::default()
-                .title(ratatui::text::Line::from(vec![
-                    ratatui::text::Span::styled(slider.label, slider.style(is_selected)),
-                ]))
+                .title(slider.label)
                 .borders(Borders::ALL)
                 .border_type(Rounded)
                 .border_style(slider.style(is_selected))
                 .render(slider_layout[index], buf);
 
-            // Render inner vertical slider
-
-            // TODO: make it responsive for terminal resize.
-            // TODO: add horizontal split option
+            let slider_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(vec![
+                    Constraint::Min(1),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                ])
+                .split(slider_layout[index].inner(Margin::new(0, 2)));
             Slider::from_state(&slider.state)
                 .orientation(SliderOrientation::Vertical)
                 .filled_symbol(slider.slider_style.filled_symbol)
@@ -69,8 +75,11 @@ impl<'a> Widget for SliderSection<'a> {
                 .filled_color(slider.color(is_selected))
                 .handle_color(slider.color(is_selected))
                 .empty_color(Color::DarkGray)
-                .show_value(true)
-                .render(slider_layout[index].inner(Margin::new(1, 2)), buf);
+                .render(slider_layout[0], buf);
+            Text::from(format!("{:.2}\n", slider.state.value()))
+                .style(slider.style(is_selected))
+                .alignment(Alignment::Center)
+                .render(slider_layout[2], buf);
         }
     }
 }

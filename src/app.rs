@@ -2,7 +2,6 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame, crossterm,
     layout::Rect,
-    text::Text,
     widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder, Theme};
@@ -11,17 +10,11 @@ use tui_slider::{SliderState, style::SliderStyle};
 
 use crate::{
     image::{ColorGrade, ImageHandler},
-    ui::{CenterOpts, centered_rect, image::ImageSection, slider::SliderSection},
+    ui::{CenterOpts, centered_rect, image::ImageSection, slider::SliderSection, warning_msg},
 };
 
-// I decided remove 720p so the protocol takes lots of time
-// I would like to see it but the applying effects only takes ~5ms and the procotol takes ~330ms
-// Because of transfering to raw image then base64 and pushing them into the terminal output buffer
-// So the total time is around 335ms for the image to show up
-// I am not sure if there is a way around that :(
-
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
-const RESOLUTION: [u32; 3] = [240, 360, 480];
+const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
 
 pub struct App {
     image_handler: ImageHandler,
@@ -69,7 +62,7 @@ impl App {
             SliderData {
                 label: "Sat",
                 state: SliderState::new(1.0, 0.0, 2.0),
-                step: 0.01,
+                step: 0.05,
                 slider_style: SliderStyle::vertical(),
             },
             SliderData {
@@ -205,12 +198,23 @@ impl App {
             frame.render_widget_ref(self.file_explorer.widget(), area);
             return;
         }
-        if area.height < 33 {
-            frame.render_widget(Text::from("Terminal is too small"), area);
-            return;
-        }
 
         let image_size = self.image_handler.target_size;
+        // 15 is maximum slider height
+        if image_size.height + 10 > area.height {
+            frame.render_widget(
+                warning_msg("Terminal is too small for \ndisplay selected frame size\n\nTry change your resolution and aspect ratio."),
+                centered_rect(
+                    CenterOpts {
+                        width: 50,
+                        height: 4,
+                        margin: 0,
+                    },
+                    area,
+                ),
+            );
+            return;
+        }
 
         let image_area = centered_rect(
             CenterOpts {

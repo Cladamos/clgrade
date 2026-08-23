@@ -1,7 +1,11 @@
 pub mod image;
 pub mod slider;
 
-use ratatui::layout::{Margin, Rect};
+use ratatui::{
+    layout::{Alignment, Margin, Rect},
+    style::Color,
+    text::Text,
+};
 
 #[derive(Debug, Copy, Clone)]
 pub struct CenterOpts {
@@ -23,4 +27,10 @@ pub fn centered_rect(opts: CenterOpts, r: Rect) -> Rect {
         horizontal: opts.margin,
         vertical: 0,
     })
+}
+
+pub fn warning_msg<'a>(msg: &'a str) -> Text<'a> {
+    Text::from(msg)
+        .style(Color::Red)
+        .alignment(Alignment::Center)
 }

@@ -40,18 +40,16 @@ impl<'a> Widget for ImageSection<'a> {
         if self.image_handler.protocol.is_none() && !self.image_handler.loading {
             Text::from("Select an image with 'f'")
                 .fg(Color::DarkGray)
-                .render(
-                    image_layout[1].centered(Constraint::Length(24), Constraint::Length(1)),
-                    buf,
-                );
+                .alignment(Alignment::Center)
+                .render(image_layout[1], buf);
         }
 
         // TODO: add loading animation, instead of plain text.
         if self.image_handler.loading {
-            Text::from("Loading...").fg(Color::DarkGray).render(
-                image_layout[1].centered(Constraint::Length(10), Constraint::Length(1)),
-                buf,
-            );
+            Text::from("Loading...")
+                .fg(Color::DarkGray)
+                .alignment(Alignment::Center)
+                .render(image_layout[1], buf);
         }
 
         let aspect_ratio = format!("{}:{}", self.aspect_ratio.0, self.aspect_ratio.1);
