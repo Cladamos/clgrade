@@ -1,16 +1,20 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    DefaultTerminal, Frame, crossterm,
+    DefaultTerminal, Frame,
+    crossterm::{self, event::KeyModifiers},
     layout::Rect,
     widgets::{FrameExt, Widget},
 };
-use ratatui_explorer::{FileExplorer, FileExplorerBuilder, Theme};
+use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
 use std::io;
 use tui_slider::{SliderState, style::SliderStyle};
 
 use crate::{
     image::{ColorGrade, ImageHandler},
-    ui::{CenterOpts, centered_rect, image::ImageSection, slider::SliderSection, warning_msg},
+    ui::{
+        CenterOpts, centered_rect, file_explorer_theme, image::ImageSection, slider::SliderSection,
+        warning_msg,
+    },
 };
 
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
@@ -31,6 +35,7 @@ pub struct App {
     is_original: bool,
     is_re_render: bool,
     is_file_explorer_visible: bool,
+    is_directory_selected: bool,
     is_image_selected: bool,
     exit: bool,
 }
@@ -84,21 +89,8 @@ impl App {
                 default_value: 0.0,
             },
         ];
-        let theme = Theme::default().add_default_title();
-        let mut file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
-        file_explorer
-            .set_filter_map(|file| {
-                let keep = match file.path.extension() {
-                    Some(extension) => {
-                        let extension = extension.to_str().unwrap_or_default();
-                        SUPPORTED_FORMATS.contains(&extension)
-                    }
-                    None => file.is_dir,
-                };
-
-                if keep { Some(file) } else { None }
-            })
-            .unwrap();
+        let theme = file_explorer_theme();
+        let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
 
         App {
             image_handler: ImageHandler::new(),
@@ -114,6 +106,7 @@ impl App {
             is_original: false,
             is_re_render: false,
             is_file_explorer_visible: false,
+            is_directory_selected: false,
             is_image_selected: false,
             exit: false,
         }
@@ -127,6 +120,11 @@ impl App {
                 let path = self.file_explorer.current().path.clone();
                 self.image_handler.load_from_path(path);
                 self.is_image_selected = false;
+            }
+            if self.is_directory_selected {
+                let path = self.file_explorer.current().path.clone();
+                self.image_handler.save_to_path(path);
+                self.is_directory_selected = false;
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
@@ -181,29 +179,60 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Char('f') => self.is_file_explorer_visible = !self.is_file_explorer_visible,
-            KeyCode::Enter => {
+        match (key_event.modifiers, key_event.code) {
+            (KeyModifiers::CONTROL, KeyCode::Char('s')) => {
+                self.file_explorer
+                    .set_filter_map(|file| if file.is_dir { Some(file) } else { None })
+                    .unwrap();
+                self.is_file_explorer_visible = true;
+            }
+            (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.exit(),
+            (_, KeyCode::Char('q')) => self.exit(),
+            (_, KeyCode::Char('f')) => {
+                self.file_explorer
+                    .set_filter_map(|file| {
+                        let keep = match file.path.extension() {
+                            Some(extension) => {
+                                let extension = extension.to_str().unwrap_or_default();
+                                SUPPORTED_FORMATS.contains(&extension)
+                            }
+                            None => file.is_dir,
+                        };
+
+                        if keep { Some(file) } else { None }
+                    })
+                    .unwrap();
+                self.is_file_explorer_visible = !self.is_file_explorer_visible
+            }
+            (_, KeyCode::Char('s')) => {
+                if self.is_file_explorer_visible
+                    && self.file_explorer.current().is_dir
+                    && self.image_handler.protocol.is_some()
+                {
+                    self.is_directory_selected = true;
+                    self.is_file_explorer_visible = false;
+                }
+            }
+            (_, KeyCode::Enter) => {
                 if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
                     self.is_image_selected = true;
                     self.is_file_explorer_visible = false;
                 }
             }
-            KeyCode::Tab => {
+            (_, KeyCode::Tab) => {
                 self.selected_slider_index = (self.selected_slider_index + 1) % self.sliders.len();
             }
-            KeyCode::Up => {
+            (_, KeyCode::Up) => {
                 let s = &mut self.sliders[self.selected_slider_index];
                 s.state.increase(s.step);
                 self.is_re_render = true;
             }
-            KeyCode::Down => {
+            (_, KeyCode::Down) => {
                 let s = &mut self.sliders[self.selected_slider_index];
                 s.state.decrease(s.step);
                 self.is_re_render = true;
             }
-            KeyCode::Char('a') => {
+            (_, KeyCode::Char('a')) => {
                 self.selected_aspect_ratio_index =
                     (self.selected_aspect_ratio_index + 1) % ASPECT_RATIOS.len();
                 self.image_handler.set_resolution(
@@ -213,7 +242,7 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-            KeyCode::Char('A') => {
+            (_, KeyCode::Char('A')) => {
                 self.selected_resolution_index =
                     (self.selected_resolution_index + 1) % RESOLUTION.len();
                 self.image_handler.set_resolution(
@@ -223,18 +252,18 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-            KeyCode::Char('r') => {
+            (_, KeyCode::Char('r')) => {
                 let s = &mut self.sliders[self.selected_slider_index];
                 s.state.set_value(s.default_value);
                 self.is_re_render = true;
             }
-            KeyCode::Char('R') => {
+            (_, KeyCode::Char('R')) => {
                 self.sliders
                     .iter_mut()
                     .for_each(|s| s.state.set_value(s.default_value));
                 self.is_re_render = true;
             }
-            KeyCode::Char(' ') => {
+            (_, KeyCode::Char(' ')) => {
                 if key_event.kind == KeyEventKind::Press {
                     self.is_show_original = true;
                     self.is_re_render = true;

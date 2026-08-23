@@ -110,6 +110,7 @@ pub struct ImageHandler {
     pub grade: ColorGrade,
     pub target_size: Size,
 
+    path: PathBuf,
     resolution: (u32, u32),
     grade_tx: Option<mpsc::Sender<ColorGrade>>,
     protocol_rx: Option<mpsc::Receiver<Protocol>>,
@@ -126,6 +127,7 @@ impl ImageHandler {
             grade: ColorGrade::default(),
             target_size: Size::new(34, 16),
 
+            path: PathBuf::new(),
             resolution: (360, 360),
             grade_tx: None,
             protocol_rx: None,
@@ -152,6 +154,7 @@ impl ImageHandler {
         self.image_path = Some(path.clone());
         self.loading = true;
         self.grade = ColorGrade::default();
+        self.path = path.clone();
 
         let (grade_tx, grade_rx) = mpsc::channel::<ColorGrade>();
         let (protocol_tx, protocol_rx) = mpsc::channel::<Protocol>();
@@ -164,12 +167,10 @@ impl ImageHandler {
         let target_size = self.target_size;
 
         thread::spawn(move || {
-            let Ok(dyn_img) = image::ImageReader::open(path).and_then(|r| {
-                r.decode()
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-            }) else {
-                return;
-            };
+            let dyn_img = image::ImageReader::open(path)
+                .expect("Failed to open image")
+                .decode()
+                .expect("Failed to decode image");
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
             let source_proxy = dyn_img
                 .thumbnail(resolution.0 / 2, resolution.1 / 2)
@@ -246,6 +247,28 @@ impl ImageHandler {
                 if protocol_tx.send(protocol).is_err() {
                     break;
                 }
+            }
+        });
+    }
+
+    pub fn save_to_path(&self, mut export_path: PathBuf) {
+        let path = self.path.clone();
+        let file_name = path.file_name().unwrap();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
+        export_path.push(file_name);
+        export_path.set_extension(format!("output.{}", ext));
+
+        let grade = self.grade.clone();
+        thread::spawn(move || {
+            let dyn_img = image::ImageReader::open(path)
+                .expect("Failed to open image")
+                .decode()
+                .expect("Failed to decode image");
+            let mut export_image = dyn_img.to_rgba8();
+            grade.apply(&dyn_img.to_rgba8(), &mut export_image);
+            match DynamicImage::ImageRgba8(export_image).save(&export_path) {
+                Ok(_) => {}
+                Err(e) => panic!("Failed to save export: {e}"),
             }
         });
     }

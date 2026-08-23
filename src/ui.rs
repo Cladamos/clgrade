@@ -5,7 +5,9 @@ use ratatui::{
     layout::{Alignment, Margin, Rect},
     style::Color,
     text::Text,
+    widgets::{Block, BorderType::Rounded, Borders},
 };
+use ratatui_explorer::Theme;
 
 #[derive(Debug, Copy, Clone)]
 pub struct CenterOpts {
@@ -33,4 +35,12 @@ pub fn warning_msg<'a>(msg: &'a str) -> Text<'a> {
     Text::from(msg)
         .style(Color::Red)
         .alignment(Alignment::Center)
+}
+
+pub fn file_explorer_theme() -> Theme {
+    let block = Block::default().borders(Borders::ALL).border_type(Rounded);
+    Theme::default()
+        .with_block(block)
+        .add_default_title()
+        .with_title_bottom(|_| "<f>: close | <enter>: select | <s>: save".into())
 }
