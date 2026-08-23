@@ -1,7 +1,7 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame, crossterm,
-    layout::{Rect, Size},
+    layout::Rect,
     text::Text,
     widgets::{FrameExt, Widget},
 };
@@ -14,10 +14,21 @@ use crate::{
     ui::{CenterOpts, centered_rect, image::ImageSection, slider::SliderSection},
 };
 
+// I decided remove 720p so the protocol takes lots of time
+// I would like to see it but the applying effects only takes ~5ms and the procotol takes ~330ms
+// Because of transfering to raw image then base64 and pushing them into the terminal output buffer
+// So the total time is around 335ms for the image to show up
+// I am not sure if there is a way around that :(
+
+const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
+const RESOLUTION: [u32; 3] = [240, 360, 480];
+
 pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
     selected_slider_index: usize,
+    selected_aspect_ratio_index: usize,
+    selected_resolution_index: usize,
     is_re_render: bool,
     is_file_explorer_visible: bool,
     is_image_selected: bool,
@@ -88,6 +99,8 @@ impl App {
             image_handler: ImageHandler::new(),
             sliders,
             selected_slider_index: 0,
+            selected_aspect_ratio_index: 0,
+            selected_resolution_index: 1,
             is_re_render: false,
             is_file_explorer_visible: false,
             is_image_selected: false,
@@ -161,6 +174,27 @@ impl App {
                 s.state.decrease(s.step);
                 self.is_re_render = true;
             }
+            KeyCode::Char('a') => {
+                self.selected_aspect_ratio_index =
+                    (self.selected_aspect_ratio_index + 1) % ASPECT_RATIOS.len();
+                self.image_handler.set_resolution(
+                    RESOLUTION[self.selected_resolution_index],
+                    ASPECT_RATIOS[self.selected_aspect_ratio_index],
+                );
+                self.image_handler.reload();
+                self.is_re_render = true;
+            }
+            KeyCode::Char('A') => {
+                self.selected_resolution_index =
+                    (self.selected_resolution_index + 1) % RESOLUTION.len();
+                self.image_handler.set_resolution(
+                    RESOLUTION[self.selected_resolution_index],
+                    ASPECT_RATIOS[self.selected_aspect_ratio_index],
+                );
+                self.image_handler.reload();
+                self.is_re_render = true;
+            }
+
             _ => {}
         }
     }
@@ -171,29 +205,24 @@ impl App {
             frame.render_widget_ref(self.file_explorer.widget(), area);
             return;
         }
-        if area.height < 35 {
+        if area.height < 33 {
             frame.render_widget(Text::from("Terminal is too small"), area);
             return;
         }
 
-        let image_size = self
-            .image_handler
-            .protocol
-            .as_ref()
-            .map(|p| p.size())
-            .unwrap_or(Size::new(52, 24));
+        let image_size = self.image_handler.target_size;
 
         let image_area = centered_rect(
             CenterOpts {
-                width: image_size.width + 2,
-                height: image_size.height + 2,
+                width: image_size.width + 2,   // For borders
+                height: image_size.height + 3, // Borders + space for text
                 margin: 0,
             },
             Rect {
                 x: area.x,
                 y: area.y,
                 width: area.width,
-                height: image_size.height + 2,
+                height: image_size.height + 3, // Borders + space for text,
             },
         );
 
@@ -210,7 +239,9 @@ impl App {
         let slider_section = SliderSection::new(&self.sliders, self.selected_slider_index);
         slider_section.render(slider_area, frame.buffer_mut());
 
-        let image_section = ImageSection::new(&self.image_handler);
+        let mut image_section = ImageSection::new(&self.image_handler);
+        image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
+        image_section.resolution = RESOLUTION[self.selected_resolution_index];
         image_section.render(image_area, frame.buffer_mut());
     }
 

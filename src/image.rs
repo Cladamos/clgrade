@@ -10,11 +10,6 @@ use ratatui::layout::Size;
 use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 use rayon::prelude::*;
 
-// In later I may want to make these configurable
-const PREVIEW_MAX_DIM: u32 = 720;
-const PROXY_MAX_DIM: u32 = 360;
-const TARGET_SIZE: Size = Size::new(52, 24);
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorGrade {
     pub temperature: f32, // -100.0 to 100.0
@@ -113,7 +108,9 @@ pub struct ImageHandler {
     pub image_path: Option<PathBuf>,
     pub loading: bool,
     pub grade: ColorGrade,
+    pub target_size: Size,
 
+    resolution: (u32, u32),
     grade_tx: Option<mpsc::Sender<ColorGrade>>,
     protocol_rx: Option<mpsc::Receiver<Protocol>>,
     picker: Picker,
@@ -127,6 +124,9 @@ impl ImageHandler {
             image_path: None,
             loading: false,
             grade: ColorGrade::default(),
+            target_size: Size::new(34, 16),
+
+            resolution: (360, 360),
             grade_tx: None,
             protocol_rx: None,
             picker,
@@ -160,6 +160,8 @@ impl ImageHandler {
         self.protocol_rx = Some(protocol_rx);
 
         let picker = self.picker.clone();
+        let resolution = self.resolution;
+        let target_size = self.target_size;
 
         thread::spawn(move || {
             let Ok(dyn_img) = image::ImageReader::open(path).and_then(|r| {
@@ -168,18 +170,16 @@ impl ImageHandler {
             }) else {
                 return;
             };
-
-            let source_high = dyn_img
-                .thumbnail(PREVIEW_MAX_DIM, PREVIEW_MAX_DIM)
+            let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
+            let source_proxy = dyn_img
+                .thumbnail(resolution.0 / 2, resolution.1 / 2)
                 .to_rgba8();
-
-            let source_proxy = dyn_img.thumbnail(PROXY_MAX_DIM, PROXY_MAX_DIM).to_rgba8();
             let mut working_proxy = source_proxy.clone();
 
             let initial = picker
                 .new_protocol(
                     DynamicImage::ImageRgba8(source_high.clone()),
-                    TARGET_SIZE,
+                    target_size,
                     Resize::Scale(Some(Nearest)),
                 )
                 .unwrap();
@@ -192,7 +192,7 @@ impl ImageHandler {
             let timeout = Duration::from_millis(200);
 
             let frame_throttle = Duration::from_millis(16);
-            let mut last_render_time = Instant::now();
+            let last_render_time = Instant::now();
             loop {
                 let mut grade = if is_dragging {
                     match grade_rx.recv_timeout(timeout) {
@@ -204,7 +204,7 @@ impl ImageHandler {
                             let protocol = picker
                                 .new_protocol(
                                     DynamicImage::ImageRgba8(working_high),
-                                    TARGET_SIZE,
+                                    target_size,
                                     Resize::Scale(Some(Nearest)),
                                 )
                                 .unwrap();
@@ -232,22 +232,47 @@ impl ImageHandler {
                 if last_render_time.elapsed() < frame_throttle {
                     continue;
                 }
+
                 grade.apply(&source_proxy, &mut working_proxy);
 
                 let protocol = picker
                     .new_protocol(
                         DynamicImage::ImageRgba8(working_proxy.clone()),
-                        TARGET_SIZE,
+                        target_size,
                         Resize::Scale(Some(Nearest)),
                     )
                     .unwrap();
-                last_render_time = Instant::now();
 
                 if protocol_tx.send(protocol).is_err() {
                     break;
                 }
             }
         });
+    }
+
+    pub fn set_resolution(&mut self, resolution: u32, aspect_ratio: (u8, u8)) {
+        let (width, height);
+        if aspect_ratio.1 > aspect_ratio.0 {
+            width = resolution;
+            height = (resolution as f32 * aspect_ratio.1 as f32 / aspect_ratio.0 as f32) as u32;
+        } else {
+            width = (resolution as f32 * aspect_ratio.0 as f32 / aspect_ratio.1 as f32) as u32;
+            height = resolution;
+        }
+
+        self.resolution = (width, height);
+
+        let font_size = self.picker.font_size();
+        self.target_size = Size::new(
+            (width / font_size.width as u32) as u16,
+            (height / font_size.height as u32) as u16,
+        );
+    }
+
+    pub fn reload(&mut self) {
+        if let Some(path) = self.image_path.clone() {
+            self.load_from_path(path);
+        }
     }
 
     pub fn apply_effects(&mut self, grade: ColorGrade) {
