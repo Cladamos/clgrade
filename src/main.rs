@@ -1,5 +1,6 @@
 mod app;
 mod image;
+mod input;
 mod ui;
 
 use std::io::stdout;

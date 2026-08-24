@@ -1,5 +1,6 @@
 pub mod image;
 pub mod slider;
+pub mod wheel;
 
 use ratatui::{
     layout::{Alignment, Margin, Rect},

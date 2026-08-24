@@ -32,11 +32,9 @@ impl Default for ColorGrade {
 }
 
 impl ColorGrade {
+    //TODO: add lift, gamma, gain to color grade struct
     pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage) {
-        //TODO: investigate math in here and come back to check it
-
         let exp_mult = 2.0_f32.powf(self.exposure);
-
         let cont_factor = (259.0 * (self.contrast + 255.0)) / (255.0 * (259.0 - self.contrast));
 
         let radians = self.hue_degrees.to_radians();

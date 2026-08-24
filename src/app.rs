@@ -1,33 +1,45 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
-    crossterm::{self, event::KeyModifiers},
+    crossterm::{self},
     layout::Rect,
     widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
 use std::io;
-use tui_slider::{SliderState, style::SliderStyle};
 
 use crate::{
     image::{ColorGrade, ImageHandler},
+    input::{Action, map_key_to_action},
     ui::{
-        CenterOpts, centered_rect, file_explorer_theme, image::ImageSection, slider::SliderSection,
+        CenterOpts, centered_rect, file_explorer_theme,
+        image::ImageSection,
+        slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
+        wheel::{WheelData, WheelSection, default_wheels},
     },
 };
 
+const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+
+// I know these can be enum too but I dont know is it worth to implement .next() instead of using them as an array
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
-// const PAGES: [&str; 2] = ["wheels", "sliders"];
+
+pub enum ActivePage {
+    Sliders,
+    Wheels,
+}
 
 pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
+    wheels: Vec<WheelData>,
     file_explorer: FileExplorer,
 
-    // page_index: usize,
+    page: ActivePage,
     selected_slider_index: usize,
+    selected_wheel_index: usize,
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
 
@@ -40,65 +52,22 @@ pub struct App {
     exit: bool,
 }
 
-pub struct SliderData {
-    pub label: &'static str,
-    pub state: SliderState,
-    pub step: f64,
-    pub slider_style: SliderStyle,
-    pub default_value: f64,
-}
-
-const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
-
 impl App {
     pub fn new() -> Self {
-        let sliders: Vec<SliderData> = vec![
-            SliderData {
-                label: "Temp",
-                state: SliderState::new(0.0, -100.0, 100.0),
-                step: 1.0,
-                slider_style: SliderStyle::vertical(),
-                default_value: 0.0,
-            },
-            SliderData {
-                label: "Exp",
-                state: SliderState::new(0.0, -3.0, 3.0),
-                step: 0.05,
-                slider_style: SliderStyle::vertical(),
-                default_value: 0.0,
-            },
-            SliderData {
-                label: "Cont",
-                state: SliderState::new(0.0, -100.0, 100.0),
-                step: 1.0,
-                slider_style: SliderStyle::vertical(),
-                default_value: 0.0,
-            },
-            SliderData {
-                label: "Sat",
-                state: SliderState::new(1.0, 0.0, 2.0),
-                step: 0.05,
-                slider_style: SliderStyle::vertical(),
-                default_value: 1.0,
-            },
-            SliderData {
-                label: "Hue",
-                state: SliderState::new(0.0, -180.0, 180.0),
-                step: 2.0,
-                slider_style: SliderStyle::vertical(),
-                default_value: 0.0,
-            },
-        ];
+        let sliders = default_sliders();
+        let wheels = default_wheels();
         let theme = file_explorer_theme();
         let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
 
         App {
             image_handler: ImageHandler::new(),
             sliders,
+            wheels,
             file_explorer,
 
-            // page_index: 0,
+            page: ActivePage::Sliders,
             selected_slider_index: 0,
+            selected_wheel_index: 0,
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 1,
 
@@ -179,16 +148,15 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match (key_event.modifiers, key_event.code) {
-            (KeyModifiers::CONTROL, KeyCode::Char('s')) => {
+        match map_key_to_action(key_event) {
+            Action::ExportImage => {
                 self.file_explorer
                     .set_filter_map(|file| if file.is_dir { Some(file) } else { None })
                     .unwrap();
                 self.is_file_explorer_visible = true;
             }
-            (KeyModifiers::CONTROL, KeyCode::Char('c')) => self.exit(),
-            (_, KeyCode::Char('q')) => self.exit(),
-            (_, KeyCode::Char('f')) => {
+            Action::Quit => self.exit(),
+            Action::ToggleFileExplorer => {
                 self.file_explorer
                     .set_filter_map(|file| {
                         let keep = match file.path.extension() {
@@ -204,7 +172,7 @@ impl App {
                     .unwrap();
                 self.is_file_explorer_visible = !self.is_file_explorer_visible
             }
-            (_, KeyCode::Char('s')) => {
+            Action::Save => {
                 if self.is_file_explorer_visible
                     && self.file_explorer.current().is_dir
                     && self.image_handler.protocol.is_some()
@@ -213,26 +181,85 @@ impl App {
                     self.is_file_explorer_visible = false;
                 }
             }
-            (_, KeyCode::Enter) => {
+            Action::Select => {
                 if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
                     self.is_image_selected = true;
                     self.is_file_explorer_visible = false;
                 }
             }
-            (_, KeyCode::Tab) => {
-                self.selected_slider_index = (self.selected_slider_index + 1) % self.sliders.len();
+            Action::SwitchToSliders => {
+                self.page = ActivePage::Sliders;
             }
-            (_, KeyCode::Up) => {
-                let s = &mut self.sliders[self.selected_slider_index];
-                s.state.increase(s.step);
-                self.is_re_render = true;
+            Action::SwitchToWheels => {
+                self.page = ActivePage::Wheels;
             }
-            (_, KeyCode::Down) => {
-                let s = &mut self.sliders[self.selected_slider_index];
-                s.state.decrease(s.step);
-                self.is_re_render = true;
-            }
-            (_, KeyCode::Char('a')) => {
+            Action::NextTool => match self.page {
+                ActivePage::Sliders => {
+                    self.selected_slider_index =
+                        (self.selected_slider_index + 1) % self.sliders.len();
+                }
+                ActivePage::Wheels => {
+                    self.selected_wheel_index = (self.selected_wheel_index + 1) % self.wheels.len();
+                }
+            },
+            //TODO: lots of unnecessary code for just increaseing/decreasing values in wheels, fix it
+            Action::IncreaseValue => match self.page {
+                ActivePage::Sliders => {
+                    let s = &mut self.sliders[self.selected_slider_index];
+                    s.state.increase(s.step);
+                    self.is_re_render = true;
+                }
+                ActivePage::Wheels => {
+                    let w = &mut self.wheels[self.selected_wheel_index];
+                    if w.y + 0.05 <= 1.0 {
+                        w.y += 0.05
+                    };
+                    self.is_re_render = true;
+                }
+            },
+            Action::IncreaseValueSideways => match self.page {
+                ActivePage::Sliders => {
+                    let s = &mut self.sliders[self.selected_slider_index];
+                    s.state.increase(s.step);
+                    self.is_re_render = true;
+                }
+                ActivePage::Wheels => {
+                    let w = &mut self.wheels[self.selected_wheel_index];
+                    if w.x + 0.05 <= 1.0 {
+                        w.x += 0.05
+                    };
+                    self.is_re_render = true;
+                }
+            },
+            Action::DecreaseValue => match self.page {
+                ActivePage::Sliders => {
+                    let s = &mut self.sliders[self.selected_slider_index];
+                    s.state.decrease(s.step);
+                    self.is_re_render = true;
+                }
+                ActivePage::Wheels => {
+                    let w = &mut self.wheels[self.selected_wheel_index];
+                    if w.y - 0.05 >= -1.0 {
+                        w.y -= 0.05;
+                    };
+                    self.is_re_render = true;
+                }
+            },
+            Action::DecreaseValueSideways => match self.page {
+                ActivePage::Sliders => {
+                    let s = &mut self.sliders[self.selected_slider_index];
+                    s.state.decrease(s.step);
+                    self.is_re_render = true;
+                }
+                ActivePage::Wheels => {
+                    let w = &mut self.wheels[self.selected_wheel_index];
+                    if w.x - 0.05 >= -1.0 {
+                        w.x -= 0.05;
+                    };
+                    self.is_re_render = true;
+                }
+            },
+            Action::ChangeAspectRatio => {
                 self.selected_aspect_ratio_index =
                     (self.selected_aspect_ratio_index + 1) % ASPECT_RATIOS.len();
                 self.image_handler.set_resolution(
@@ -242,7 +269,7 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-            (_, KeyCode::Char('A')) => {
+            Action::ChangeResolution => {
                 self.selected_resolution_index =
                     (self.selected_resolution_index + 1) % RESOLUTION.len();
                 self.image_handler.set_resolution(
@@ -252,18 +279,18 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-            (_, KeyCode::Char('r')) => {
+            Action::ResetTool => {
                 let s = &mut self.sliders[self.selected_slider_index];
                 s.state.set_value(s.default_value);
                 self.is_re_render = true;
             }
-            (_, KeyCode::Char('R')) => {
+            Action::ResetAll => {
                 self.sliders
                     .iter_mut()
                     .for_each(|s| s.state.set_value(s.default_value));
                 self.is_re_render = true;
             }
-            (_, KeyCode::Char(' ')) => {
+            Action::ToggleOriginal => {
                 if key_event.kind == KeyEventKind::Press {
                     self.is_show_original = true;
                     self.is_re_render = true;
@@ -286,8 +313,8 @@ impl App {
         }
 
         let image_size = self.image_handler.target_size;
-        // 15 is maximum slider height
-        if image_size.height + 10 > area.height {
+        // TODO: 9:16 720p is too big find a solution I think horizontal layout will be great
+        if image_size.height + 15 > area.height {
             frame.render_widget(
                 warning_msg("Terminal is too small for \ndisplay selected frame size\n\nTry change your resolution and aspect ratio."),
                 centered_rect(
@@ -304,30 +331,58 @@ impl App {
 
         let image_area = centered_rect(
             CenterOpts {
-                width: image_size.width + 2,   // For borders
-                height: image_size.height + 3, // Borders + space for text
+                width: image_size.width.saturating_add(2),   // For borders
+                height: image_size.height.saturating_add(3), // Borders + space for text
                 margin: 0,
             },
             Rect {
                 x: area.x,
                 y: area.y,
                 width: area.width,
-                height: image_size.height + 3, // Borders + space for text,
+                height: image_size.height.saturating_add(3), // Borders + space for text,
             },
         );
 
-        let slider_height = area.height - image_area.bottom() - 2;
-        let slider_area = centered_rect(
-            CenterOpts {
-                //TODO: slider width with constant if you change in ui/slider.rs you need to change here too. fix it
-                width: (self.sliders.len() * 15) as u16,
-                height: slider_height,
-                margin: 0,
-            },
-            Rect::new(area.x, image_area.bottom() + 1, area.width, slider_height),
-        );
-        let slider_section = SliderSection::new(&self.sliders, self.selected_slider_index);
-        slider_section.render(slider_area, frame.buffer_mut());
+        match self.page {
+            ActivePage::Sliders => {
+                let slider_height = area.height - image_area.bottom().saturating_sub(2);
+                let slider_area = centered_rect(
+                    CenterOpts {
+                        //TODO: slider width is constant if you change in ui/slider.rs you need to change here too. fix it
+                        width: (self.sliders.len() * 15) as u16,
+                        height: slider_height,
+                        margin: 0,
+                    },
+                    Rect::new(
+                        area.x,
+                        image_area.bottom().saturating_add(1),
+                        area.width,
+                        slider_height,
+                    ),
+                );
+                let slider_section = SliderSection::new(&self.sliders, self.selected_slider_index);
+                slider_section.render(slider_area, frame.buffer_mut());
+            }
+            ActivePage::Wheels => {
+                let wheel_height = 12;
+                let wheel_area = centered_rect(
+                    CenterOpts {
+                        //TODO: wheel width is constants if you change in ui/wheel.rs you need to change here too. fix it
+                        width: self.wheels.len() as u16 * 21,
+                        height: wheel_height,
+                        margin: 0,
+                    },
+                    Rect::new(
+                        area.x,
+                        image_area.bottom().saturating_add(1),
+                        area.width,
+                        wheel_height,
+                    ),
+                );
+                let wheel_section = WheelSection::new(&self.wheels, self.selected_wheel_index);
+                wheel_section.render(wheel_area, frame.buffer_mut());
+            }
+        }
 
         let mut image_section = ImageSection::new(&self.image_handler);
         image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
