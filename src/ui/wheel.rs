@@ -8,8 +8,8 @@ use ratatui::widgets::{Block, Borders};
 
 pub struct WheelData {
     pub label: &'static str,
-    pub x: f64,
-    pub y: f64,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl WheelData {
@@ -120,7 +120,7 @@ impl<'a> Widget for WheelSection<'a> {
 
                     let color = match (is_top, is_bottom, is_left, is_right) {
                         (true, _, _, _) => Color::Yellow,
-                        (_, true, _, _) => Color::Cyan,
+                        (_, true, _, _) => Color::Blue,
                         (_, _, true, _) => Color::Green,
                         (_, _, _, true) => Color::Magenta,
                         _ => Color::DarkGray,
@@ -131,12 +131,12 @@ impl<'a> Widget for WheelSection<'a> {
 
             // Calculate cursor position
             // wheel.x and wheel.y are expected to be between -1.0 and 1.0
-            let max_x = (inner_area.width.saturating_sub(1)) as f64 / 2.0;
-            let max_y = (inner_area.height.saturating_sub(1)) as f64 / 2.0;
+            let max_x = (inner_area.width.saturating_sub(1)) as f32 / 2.0;
+            let max_y = (inner_area.height.saturating_sub(1)) as f32 / 2.0;
 
-            let cursor_x = (center_x as f64 + wheel.x * max_x).round() as u16;
+            let cursor_x = (center_x as f32 + wheel.x * max_x).round() as u16;
             // Subtract for Y because terminal coordinates go down, but math goes up
-            let cursor_y = (center_y as f64 - wheel.y * max_y).round() as u16;
+            let cursor_y = (center_y as f32 - wheel.y * max_y).round() as u16;
 
             let cursor_x = cursor_x.clamp(inner_area.left(), inner_area.right().saturating_sub(1));
             let cursor_y = cursor_y.clamp(inner_area.top(), inner_area.bottom().saturating_sub(1));

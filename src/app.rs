@@ -97,24 +97,28 @@ impl App {
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
-                    self.image_handler.apply_effects(ColorGrade {
-                        temperature: 0.0,
-                        tint: 0.0,
-                        exposure: 0.0,
-                        contrast: 0.0,
-                        saturation: 1.0,
-                        hue_degrees: 0.0,
-                    });
+                    self.image_handler.apply_effects(ColorGrade::default());
                     self.is_original = true;
                 }
                 if !self.is_show_original {
                     self.image_handler.apply_effects(ColorGrade {
+                        //sliders
                         temperature: self.sliders[0].state.value() as f32,
                         tint: self.sliders[1].state.value() as f32,
                         exposure: self.sliders[2].state.value() as f32,
                         contrast: self.sliders[3].state.value() as f32,
                         saturation: self.sliders[4].state.value() as f32,
                         hue_degrees: self.sliders[5].state.value() as f32,
+                        //wheels
+                        lift_x: self.wheels[0].x,
+                        lift_y: self.wheels[0].y,
+                        // lift_luma: self.wheels[0].luma.value(),
+                        gamma_x: self.wheels[1].x,
+                        gamma_y: self.wheels[1].y,
+                        // gamma_luma: self.wheels[1].luma.value(),
+                        gain_x: self.wheels[2].x,
+                        gain_y: self.wheels[2].y,
+                        // gain_luma: self.wheels[2].luma.value(),
                     });
                 }
                 self.is_re_render = false;
@@ -281,15 +285,27 @@ impl App {
                 self.image_handler.reload();
                 self.is_re_render = true;
             }
-            Action::ResetTool => {
-                let s = &mut self.sliders[self.selected_slider_index];
-                s.state.set_value(s.default_value);
-                self.is_re_render = true;
-            }
+            Action::ResetTool => match self.page {
+                ActivePage::Sliders => {
+                    let s = &mut self.sliders[self.selected_slider_index];
+                    s.state.set_value(s.default_value);
+                    self.is_re_render = true;
+                }
+                ActivePage::Wheels => {
+                    let w = &mut self.wheels[self.selected_wheel_index];
+                    w.x = 0.0;
+                    w.y = 0.0;
+                    self.is_re_render = true;
+                }
+            },
             Action::ResetAll => {
                 self.sliders
                     .iter_mut()
                     .for_each(|s| s.state.set_value(s.default_value));
+                self.wheels.iter_mut().for_each(|w| {
+                    w.x = 0.0;
+                    w.y = 0.0;
+                });
                 self.is_re_render = true;
             }
             Action::ToggleOriginal => {

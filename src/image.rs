@@ -18,6 +18,16 @@ pub struct ColorGrade {
     pub contrast: f32,    // -100.0 to 100.0
     pub saturation: f32,  // 0.0 to 2.0
     pub hue_degrees: f32, // -180.0 to 180.0
+
+    pub lift_x: f32,
+    pub lift_y: f32,
+    // pub lift_luma: f32,
+    pub gamma_x: f32,
+    pub gamma_y: f32,
+    // pub gamma_luma: f32,
+    pub gain_x: f32,
+    pub gain_y: f32,
+    // pub gain_luma: f32,
 }
 
 impl Default for ColorGrade {
@@ -29,6 +39,16 @@ impl Default for ColorGrade {
             contrast: 0.0,
             saturation: 1.0,
             hue_degrees: 0.0,
+
+            lift_x: 0.0,
+            lift_y: 0.0,
+            // lift_luma: 0.0,
+            gamma_x: 0.0,
+            gamma_y: 0.0,
+            // gamma_luma: 0.0,
+            gain_x: 0.0,
+            gain_y: 0.0,
+            // gain_luma: 0.0,
         }
     }
 }
@@ -54,6 +74,23 @@ impl ColorGrade {
             0.072 + 0.928 * cos_a + 0.072 * sin_a,
         ];
 
+        let intensity = 50.0;
+
+        // Pre-calculate Lift (Shadows) Color + Brightness
+        let lift_r = (self.lift_y + self.lift_x) * intensity; //+ self.lift_luma;
+        let lift_g = (self.lift_y - self.lift_x) * intensity; //+ self.lift_luma;
+        let lift_b = (-self.lift_y + self.lift_x) * intensity; //+ self.lift_luma;
+
+        // Pre-calculate Gamma (Midtones) Color + Brightness
+        let gamma_r = (self.gamma_y + self.gamma_x) * intensity; //+ self.gamma_luma;
+        let gamma_g = (self.gamma_y - self.gamma_x) * intensity; //+ self.gamma_luma;
+        let gamma_b = (-self.gamma_y + self.gamma_x) * intensity; //+ self.gamma_luma;
+
+        // Pre-calculate Gain (Highlights) Color + Brightness
+        let gain_r = (self.gain_y + self.gain_x) * intensity; //+ self.gain_luma;
+        let gain_g = (self.gain_y - self.gain_x) * intensity; //+ self.gain_luma;
+        let gain_b = (-self.gain_y + self.gain_x) * intensity; //+ self.gain_luma;
+
         working
             .par_pixels_mut()
             .zip(source.par_pixels())
@@ -76,6 +113,20 @@ impl ColorGrade {
                 r = cont_factor * (r - 128.0) + 128.0;
                 g = cont_factor * (g - 128.0) + 128.0;
                 b = cont_factor * (b - 128.0) + 128.0;
+
+                // lift, gamma, gain
+                let mask_lum = ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0).clamp(0.0, 1.0);
+
+                // Build the smooth crossover masks
+                let shadow_mask = (1.0 - (mask_lum * 2.0)).clamp(0.0, 1.0);
+                let highlight_mask = ((mask_lum - 0.5) * 2.0).clamp(0.0, 1.0);
+                let midtone_mask = (1.0 - shadow_mask - highlight_mask).clamp(0.0, 1.0);
+
+                // 3. Apply the wheel colors and luma based on the masks
+                r += (lift_r * shadow_mask) + (gamma_r * midtone_mask) + (gain_r * highlight_mask);
+                g += (lift_g * shadow_mask) + (gamma_g * midtone_mask) + (gain_g * highlight_mask);
+                b += (lift_b * shadow_mask) + (gamma_b * midtone_mask) + (gain_b * highlight_mask);
+                // ---
 
                 // Hue Rotation
                 if self.hue_degrees != 0.0 {
