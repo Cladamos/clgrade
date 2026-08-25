@@ -49,6 +49,7 @@ pub struct App {
     is_file_explorer_visible: bool,
     is_directory_selected: bool,
     is_image_selected: bool,
+    is_proxy_enabled: bool,
     exit: bool,
 }
 
@@ -77,6 +78,7 @@ impl App {
             is_file_explorer_visible: false,
             is_directory_selected: false,
             is_image_selected: false,
+            is_proxy_enabled: true,
             exit: false,
         }
     }
@@ -318,6 +320,12 @@ impl App {
                     self.is_original = false;
                     self.is_re_render = true;
                 }
+            }
+            Action::ToggleProxy => {
+                self.is_proxy_enabled = !self.is_proxy_enabled;
+                self.image_handler.is_proxy_enabled = self.is_proxy_enabled;
+                self.image_handler.reload();
+                self.is_re_render = true;
             }
             _ => {}
         }

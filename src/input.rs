@@ -19,6 +19,7 @@ pub enum Action {
     Select,
     Save,
     ToggleOriginal,
+    ToggleProxy,
     None,
 }
 
@@ -26,9 +27,11 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
     match (key.modifiers, key.code) {
         (KeyModifiers::CONTROL, KeyCode::Char('s')) => Action::ExportImage,
         (_, KeyCode::Char('q')) | (KeyModifiers::CONTROL, KeyCode::Char('c')) => Action::Quit,
-        (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,
-        (_, KeyCode::Char('s')) => Action::Save,
         (_, KeyCode::Enter) => Action::Select,
+        (_, KeyCode::Char('s')) => Action::Save,
+        (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,
+        (_, KeyCode::Char('p')) => Action::ToggleProxy,
+        (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
 
         // Navigation
         (_, KeyCode::Tab) => Action::NextTool,
@@ -44,7 +47,6 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('A')) => Action::ChangeResolution,
         (_, KeyCode::Char('r')) => Action::ResetTool,
         (_, KeyCode::Char('R')) => Action::ResetAll,
-        (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
 
         _ => Action::None,
     }
