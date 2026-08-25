@@ -16,7 +16,7 @@ pub struct SliderData {
 }
 
 impl SliderData {
-    fn style(&self, selected: bool) -> Style {
+    pub fn style(&self, selected: bool) -> Style {
         if selected {
             Style::default()
                 .fg(Color::Blue)
@@ -26,7 +26,7 @@ impl SliderData {
         }
     }
 
-    fn color(&self, selected: bool) -> Color {
+    pub fn color(&self, selected: bool) -> Color {
         if selected { Color::Blue } else { Color::Gray }
     }
 }
@@ -76,6 +76,16 @@ pub fn default_sliders() -> Vec<SliderData> {
             default_value: 0.0,
         },
     ]
+}
+
+pub fn lum_slider() -> SliderData {
+    SliderData {
+        label: "Lum",
+        state: SliderState::new(0.0, -100.0, 100.0),
+        step: 1.0,
+        slider_style: SliderStyle::horizontal(),
+        default_value: 0.0,
+    }
 }
 
 pub struct SliderSection<'a> {

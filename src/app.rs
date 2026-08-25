@@ -16,7 +16,7 @@ use crate::{
         image::ImageSection,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
-        wheel::{WheelData, WheelSection, default_wheels},
+        wheel::{SelectedPart, WheelData, WheelSection, default_wheels},
     },
 };
 
@@ -111,16 +111,17 @@ impl App {
                         contrast: self.sliders[3].state.value() as f32,
                         saturation: self.sliders[4].state.value() as f32,
                         hue_degrees: self.sliders[5].state.value() as f32,
+
                         //wheels
                         lift_x: self.wheels[0].x,
                         lift_y: self.wheels[0].y,
-                        // lift_luma: self.wheels[0].luma.value(),
+                        lift_lum: self.wheels[0].lum.state.value() as f32,
                         gamma_x: self.wheels[1].x,
                         gamma_y: self.wheels[1].y,
-                        // gamma_luma: self.wheels[1].luma.value(),
+                        gamma_lum: self.wheels[1].lum.state.value() as f32,
                         gain_x: self.wheels[2].x,
                         gain_y: self.wheels[2].y,
-                        // gain_luma: self.wheels[2].luma.value(),
+                        gain_lum: self.wheels[2].lum.state.value() as f32,
                     });
                 }
                 self.is_re_render = false;
@@ -207,66 +208,52 @@ impl App {
                         (self.selected_slider_index + 1) % self.sliders.len();
                 }
                 ActivePage::Wheels => {
-                    self.selected_wheel_index = (self.selected_wheel_index + 1) % self.wheels.len();
+                    let current_wheel = &mut self.wheels[self.selected_wheel_index];
+                    if current_wheel.focused_part == SelectedPart::LumSlider {
+                        current_wheel.focused_part = SelectedPart::Wheel;
+                        self.selected_wheel_index =
+                            (self.selected_wheel_index + 1) % self.wheels.len();
+                    } else {
+                        current_wheel.focused_part = SelectedPart::LumSlider;
+                    }
                 }
             },
-            //TODO: lots of unnecessary code for just increaseing/decreasing values in wheels, fix it
-            Action::IncreaseValue => match self.page {
-                ActivePage::Sliders => {
-                    let s = &mut self.sliders[self.selected_slider_index];
-                    s.state.increase(s.step);
-                    self.is_re_render = true;
+            Action::AdjustValue { delta_x, delta_y } => {
+                match self.page {
+                    ActivePage::Sliders => {
+                        let s = &mut self.sliders[self.selected_slider_index];
+                        let direction = delta_y + delta_x; // one is always 0
+                        if direction > 0.0 {
+                            s.state.increase(s.step);
+                        } else {
+                            s.state.decrease(s.step);
+                        }
+                    }
+                    ActivePage::Wheels => {
+                        let w = &mut self.wheels[self.selected_wheel_index];
+                        if w.focused_part == SelectedPart::Wheel {
+                            let step = 0.05;
+                            let new_x = w.x + delta_x * step;
+                            let new_y = w.y + delta_y * step;
+                            if (-1.0..=1.0).contains(&new_x) {
+                                w.x = new_x;
+                            }
+                            if (-1.0..=1.0).contains(&new_y) {
+                                w.y = new_y;
+                            }
+                        } else {
+                            let s = &mut w.lum;
+                            let direction = delta_y + delta_x;
+                            if direction > 0.0 {
+                                s.state.increase(s.step);
+                            } else {
+                                s.state.decrease(s.step);
+                            }
+                        }
+                    }
                 }
-                ActivePage::Wheels => {
-                    let w = &mut self.wheels[self.selected_wheel_index];
-                    if w.y + 0.05 <= 1.0 {
-                        w.y += 0.05
-                    };
-                    self.is_re_render = true;
-                }
-            },
-            Action::IncreaseValueSideways => match self.page {
-                ActivePage::Sliders => {
-                    let s = &mut self.sliders[self.selected_slider_index];
-                    s.state.increase(s.step);
-                    self.is_re_render = true;
-                }
-                ActivePage::Wheels => {
-                    let w = &mut self.wheels[self.selected_wheel_index];
-                    if w.x + 0.05 <= 1.0 {
-                        w.x += 0.05
-                    };
-                    self.is_re_render = true;
-                }
-            },
-            Action::DecreaseValue => match self.page {
-                ActivePage::Sliders => {
-                    let s = &mut self.sliders[self.selected_slider_index];
-                    s.state.decrease(s.step);
-                    self.is_re_render = true;
-                }
-                ActivePage::Wheels => {
-                    let w = &mut self.wheels[self.selected_wheel_index];
-                    if w.y - 0.05 >= -1.0 {
-                        w.y -= 0.05;
-                    };
-                    self.is_re_render = true;
-                }
-            },
-            Action::DecreaseValueSideways => match self.page {
-                ActivePage::Sliders => {
-                    let s = &mut self.sliders[self.selected_slider_index];
-                    s.state.decrease(s.step);
-                    self.is_re_render = true;
-                }
-                ActivePage::Wheels => {
-                    let w = &mut self.wheels[self.selected_wheel_index];
-                    if w.x - 0.05 >= -1.0 {
-                        w.x -= 0.05;
-                    };
-                    self.is_re_render = true;
-                }
-            },
+                self.is_re_render = true;
+            }
             Action::ChangeAspectRatio => {
                 self.selected_aspect_ratio_index =
                     (self.selected_aspect_ratio_index + 1) % ASPECT_RATIOS.len();
@@ -295,8 +282,12 @@ impl App {
                 }
                 ActivePage::Wheels => {
                     let w = &mut self.wheels[self.selected_wheel_index];
-                    w.x = 0.0;
-                    w.y = 0.0;
+                    if w.focused_part == SelectedPart::Wheel {
+                        w.x = 0.0;
+                        w.y = 0.0;
+                    } else {
+                        w.lum.state.set_value(w.lum.default_value);
+                    }
                     self.is_re_render = true;
                 }
             },
@@ -307,6 +298,7 @@ impl App {
                 self.wheels.iter_mut().for_each(|w| {
                     w.x = 0.0;
                     w.y = 0.0;
+                    w.lum.state.set_value(w.lum.default_value);
                 });
                 self.is_re_render = true;
             }
@@ -340,7 +332,7 @@ impl App {
 
         let image_size = self.image_handler.target_size;
         // TODO: 9:16 720p is too big find a solution I think horizontal layout will be great
-        if image_size.height + 15 > area.height {
+        if image_size.height + 19 > area.height {
             frame.render_widget(
                 warning_msg("Terminal is too small for \ndisplay selected frame size\n\nTry change your resolution and aspect ratio."),
                 centered_rect(
@@ -390,7 +382,7 @@ impl App {
                 slider_section.render(slider_area, frame.buffer_mut());
             }
             ActivePage::Wheels => {
-                let wheel_height = 12;
+                let wheel_height = 16;
                 let wheel_area = centered_rect(
                     CenterOpts {
                         //TODO: wheel width is constants if you change in ui/wheel.rs you need to change here too. fix it
