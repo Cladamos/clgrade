@@ -13,6 +13,7 @@ use rayon::prelude::*;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorGrade {
     pub temperature: f32, // -100.0 to 100.0
+    pub tint: f32,        // -100.0 to 100.0
     pub exposure: f32,    // -3.0 to 3.0
     pub contrast: f32,    // -100.0 to 100.0
     pub saturation: f32,  // 0.0 to 2.0
@@ -23,6 +24,7 @@ impl Default for ColorGrade {
     fn default() -> Self {
         ColorGrade {
             temperature: 0.0,
+            tint: 0.0,
             exposure: 0.0,
             contrast: 0.0,
             saturation: 1.0,
@@ -60,9 +62,10 @@ impl ColorGrade {
                 let mut g = s_px[1] as f32;
                 let mut b = s_px[2] as f32;
 
-                // White Balance (Temperature)
-                r += self.temperature;
-                b -= self.temperature;
+                // White Balance (Temperature & Tint)
+                r += self.temperature + self.tint;
+                g -= self.tint;
+                b -= self.temperature - self.tint;
 
                 // Exposure
                 r *= exp_mult;

@@ -41,6 +41,13 @@ pub fn default_sliders() -> Vec<SliderData> {
             default_value: 0.0,
         },
         SliderData {
+            label: "Tint",
+            state: SliderState::new(0.0, -100.0, 100.0),
+            step: 1.0,
+            slider_style: SliderStyle::vertical(),
+            default_value: 0.0,
+        },
+        SliderData {
             label: "Exp",
             state: SliderState::new(0.0, -3.0, 3.0),
             step: 0.05,

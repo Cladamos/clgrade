@@ -99,6 +99,7 @@ impl App {
                 if self.is_show_original && !self.is_original {
                     self.image_handler.apply_effects(ColorGrade {
                         temperature: 0.0,
+                        tint: 0.0,
                         exposure: 0.0,
                         contrast: 0.0,
                         saturation: 1.0,
@@ -109,10 +110,11 @@ impl App {
                 if !self.is_show_original {
                     self.image_handler.apply_effects(ColorGrade {
                         temperature: self.sliders[0].state.value() as f32,
-                        exposure: self.sliders[1].state.value() as f32,
-                        contrast: self.sliders[2].state.value() as f32,
-                        saturation: self.sliders[3].state.value() as f32,
-                        hue_degrees: self.sliders[4].state.value() as f32,
+                        tint: self.sliders[1].state.value() as f32,
+                        exposure: self.sliders[2].state.value() as f32,
+                        contrast: self.sliders[3].state.value() as f32,
+                        saturation: self.sliders[4].state.value() as f32,
+                        hue_degrees: self.sliders[5].state.value() as f32,
                     });
                 }
                 self.is_re_render = false;
@@ -349,7 +351,7 @@ impl App {
                 let slider_area = centered_rect(
                     CenterOpts {
                         //TODO: slider width is constant if you change in ui/slider.rs you need to change here too. fix it
-                        width: (self.sliders.len() * 15) as u16,
+                        width: (self.sliders.len() * 13) as u16,
                         height: slider_height,
                         margin: 0,
                     },
