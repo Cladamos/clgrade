@@ -5,8 +5,10 @@ use ratatui::text::Text;
 use ratatui::widgets::BorderType::Rounded;
 use ratatui::widgets::Widget;
 use ratatui::widgets::{Block, Borders};
+use tui_slider::style::SliderStyle;
 use tui_slider::{Slider, SliderOrientation};
 
+use crate::app::AppLayout;
 use crate::ui::slider::{SliderData, lum_slider};
 
 #[derive(PartialEq)]
@@ -36,6 +38,7 @@ impl WheelData {
 pub struct WheelSection<'a> {
     wheels: &'a [WheelData],
     selected_index: usize,
+    app_layout: AppLayout,
 }
 
 pub fn default_wheels() -> Vec<WheelData> {
@@ -65,22 +68,41 @@ pub fn default_wheels() -> Vec<WheelData> {
 }
 
 impl<'a> WheelSection<'a> {
-    pub fn new(wheels: &'a [WheelData], selected_index: usize) -> Self {
+    pub const WIDGET_WIDTH: u16 = 21;
+    pub const WIDGET_HEIGHT: u16 = 16;
+    pub const LUM_AREA_OFFSET: u16 = 4;
+    pub const LUM_SLIDER_HEIGHT: u16 = 3;
+
+    pub fn new(wheels: &'a [WheelData], selected_index: usize, app_layout: AppLayout) -> Self {
         Self {
             wheels,
             selected_index,
+            app_layout,
         }
     }
 }
 
-//TODO: Add slider to wheels for adjusting applying amount
 impl<'a> Widget for WheelSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let wheel_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(self.wheels.iter().map(|_| Constraint::Length(21)))
-            .split(area);
-
+        let wheel_layout = if self.app_layout == AppLayout::Horizontal {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(
+                    self.wheels
+                        .iter()
+                        .map(|_| Constraint::Length(Self::WIDGET_WIDTH)),
+                )
+                .split(area)
+        } else {
+            Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    self.wheels
+                        .iter()
+                        .map(|_| Constraint::Length(Self::WIDGET_WIDTH)),
+                )
+                .split(area)
+        };
         for (index, wheel) in self.wheels.iter().enumerate() {
             let is_wheel_focused =
                 self.selected_index == index && matches!(wheel.focused_part, SelectedPart::Wheel);
@@ -91,7 +113,9 @@ impl<'a> Widget for WheelSection<'a> {
                 x: wheel_layout[index].x,
                 y: wheel_layout[index].y,
                 width: wheel_layout[index].width,
-                height: wheel_layout[index].height - 4,
+                height: wheel_layout[index]
+                    .height
+                    .saturating_sub(Self::LUM_AREA_OFFSET),
             };
             Block::default()
                 .title(wheel.label)
@@ -168,9 +192,11 @@ impl<'a> Widget for WheelSection<'a> {
 
             let slider_area = Rect {
                 x: wheel_layout[index].x,
-                y: wheel_layout[index].bottom().saturating_sub(4),
+                y: wheel_layout[index]
+                    .bottom()
+                    .saturating_sub(Self::LUM_AREA_OFFSET),
                 width: wheel_layout[index].width,
-                height: 3,
+                height: Self::LUM_SLIDER_HEIGHT,
             };
             let slider = &wheel.lum;
             Block::default()
@@ -180,11 +206,12 @@ impl<'a> Widget for WheelSection<'a> {
                 .border_style(slider.style(is_lum_focused))
                 .render(slider_area, buf);
 
+            let slider_style = SliderStyle::horizontal();
             Slider::from_state(&slider.state)
                 .orientation(SliderOrientation::Horizontal)
-                .filled_symbol(slider.slider_style.filled_symbol)
-                .handle_symbol(slider.slider_style.handle_symbol)
-                .empty_symbol(slider.slider_style.empty_symbol)
+                .filled_symbol(slider_style.filled_symbol)
+                .handle_symbol(slider_style.handle_symbol)
+                .empty_symbol(slider_style.empty_symbol)
                 .filled_color(slider.color(is_lum_focused))
                 .handle_color(slider.color(is_lum_focused))
                 .empty_color(Color::DarkGray)

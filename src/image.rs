@@ -54,7 +54,6 @@ impl Default for ColorGrade {
 }
 
 impl ColorGrade {
-    //TODO: add lift, gamma, gain to color grade struct
     pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage) {
         let exp_mult = 2.0_f32.powf(self.exposure);
         let cont_factor = (259.0 * (self.contrast + 255.0)) / (255.0 * (259.0 - self.contrast));
@@ -175,7 +174,7 @@ impl ImageHandler {
             image_path: None,
             loading: false,
             grade: ColorGrade::default(),
-            target_size: Size::new(34, 16),
+            target_size: Size::new(26, 12),
             is_proxy_enabled: true,
 
             path: PathBuf::new(),

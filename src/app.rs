@@ -14,6 +14,7 @@ use crate::{
     ui::{
         CenterOpts, centered_rect, file_explorer_theme,
         image::ImageSection,
+        page_indicator,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
         wheel::{SelectedPart, WheelData, WheelSection, default_wheels},
@@ -26,9 +27,15 @@ const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
 
+#[derive(Copy, Clone)]
 pub enum ActivePage {
     Sliders,
     Wheels,
+}
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum AppLayout {
+    Horizontal,
+    Vertical,
 }
 
 pub struct App {
@@ -38,6 +45,8 @@ pub struct App {
     file_explorer: FileExplorer,
 
     page: ActivePage,
+    layout: AppLayout,
+
     selected_slider_index: usize,
     selected_wheel_index: usize,
     selected_aspect_ratio_index: usize,
@@ -67,6 +76,8 @@ impl App {
             file_explorer,
 
             page: ActivePage::Sliders,
+            layout: AppLayout::Vertical,
+
             selected_slider_index: 0,
             selected_wheel_index: 0,
             selected_aspect_ratio_index: 0,
@@ -202,6 +213,12 @@ impl App {
             Action::SwitchToWheels => {
                 self.page = ActivePage::Wheels;
             }
+            Action::ToggleLayout => {
+                self.layout = match self.layout {
+                    AppLayout::Horizontal => AppLayout::Vertical,
+                    AppLayout::Vertical => AppLayout::Horizontal,
+                };
+            }
             Action::NextTool => match self.page {
                 ActivePage::Sliders => {
                     self.selected_slider_index =
@@ -331,10 +348,45 @@ impl App {
         }
 
         let image_size = self.image_handler.target_size;
-        // TODO: 9:16 720p is too big find a solution I think horizontal layout will be great
-        if image_size.height + 19 > area.height {
+        let too_small = match self.layout {
+            AppLayout::Vertical => {
+                let controls_height = match self.page {
+                    ActivePage::Sliders => SliderSection::PANEL_HEIGHT,
+                    ActivePage::Wheels => WheelSection::WIDGET_HEIGHT,
+                };
+                let controls_width = match self.page {
+                    ActivePage::Sliders => self.sliders.len() as u16 * SliderSection::ITEM_WIDTH,
+                    ActivePage::Wheels => self.wheels.len() as u16 * WheelSection::WIDGET_WIDTH,
+                };
+                // image borders(2) + info line(1) + gap(1) + controls + page indicator(1)
+                let needed_height = image_size
+                    .height
+                    .saturating_add(3) // image borders + info line
+                    .saturating_add(1) // gap between image and controls
+                    .saturating_add(controls_height)
+                    .saturating_add(1); // page indicator
+                let needed_width = image_size.width.saturating_add(2).max(controls_width);
+                area.height < needed_height || area.width < needed_width
+            }
+            AppLayout::Horizontal => {
+                // image borders(2) + left sidebar (sliders) + right sidebar (wheels)
+                let needed_width = image_size
+                    .width
+                    .saturating_add(2)
+                    .saturating_add(SliderSection::PANEL_WIDTH)
+                    .saturating_add(WheelSection::WIDGET_WIDTH);
+                let slider_stack = self.sliders.len() as u16 * SliderSection::ITEM_HEIGHT;
+                let wheel_stack = self.wheels.len() as u16 * WheelSection::WIDGET_HEIGHT;
+                let needed_height = slider_stack.max(wheel_stack);
+                area.height < needed_height || area.width < needed_width
+            }
+        };
+
+        if too_small {
             frame.render_widget(
-                warning_msg("Terminal is too small for \ndisplay selected frame size\n\nTry change your resolution and aspect ratio."),
+                warning_msg(
+                    "Terminal is too small for \ndisplay selected frame size\n\nTry change your resolution and aspect ratio.",
+                ),
                 centered_rect(
                     CenterOpts {
                         width: 50,
@@ -361,51 +413,102 @@ impl App {
             },
         );
 
-        match self.page {
-            ActivePage::Sliders => {
-                let slider_height = area.height - image_area.bottom().saturating_sub(2);
+        match self.layout {
+            AppLayout::Horizontal => {
+                let slider_stack_height = self.sliders.len() as u16 * SliderSection::ITEM_HEIGHT;
                 let slider_area = centered_rect(
                     CenterOpts {
-                        //TODO: slider width is constant if you change in ui/slider.rs you need to change here too. fix it
-                        width: (self.sliders.len() * 13) as u16,
-                        height: slider_height,
+                        width: SliderSection::PANEL_WIDTH,
+                        height: slider_stack_height,
                         margin: 0,
                     },
                     Rect::new(
                         area.x,
-                        image_area.bottom().saturating_add(1),
-                        area.width,
-                        slider_height,
+                        area.y,
+                        SliderSection::PANEL_WIDTH,
+                        slider_stack_height,
                     ),
                 );
-                let slider_section = SliderSection::new(&self.sliders, self.selected_slider_index);
+                let slider_section =
+                    SliderSection::new(&self.sliders, self.selected_slider_index, self.layout);
                 slider_section.render(slider_area, frame.buffer_mut());
-            }
-            ActivePage::Wheels => {
-                let wheel_height = 16;
+
+                let wheel_stack_height = self.wheels.len() as u16 * WheelSection::WIDGET_HEIGHT;
                 let wheel_area = centered_rect(
                     CenterOpts {
-                        //TODO: wheel width is constants if you change in ui/wheel.rs you need to change here too. fix it
-                        width: self.wheels.len() as u16 * 21,
-                        height: wheel_height,
+                        width: WheelSection::WIDGET_WIDTH,
+                        height: wheel_stack_height,
                         margin: 0,
                     },
                     Rect::new(
-                        area.x,
-                        image_area.bottom().saturating_add(1),
-                        area.width,
-                        wheel_height,
+                        area.right().saturating_sub(WheelSection::WIDGET_WIDTH),
+                        area.y,
+                        WheelSection::WIDGET_WIDTH,
+                        wheel_stack_height,
                     ),
                 );
-                let wheel_section = WheelSection::new(&self.wheels, self.selected_wheel_index);
+                let wheel_section =
+                    WheelSection::new(&self.wheels, self.selected_wheel_index, self.layout);
                 wheel_section.render(wheel_area, frame.buffer_mut());
             }
+            AppLayout::Vertical => match self.page {
+                ActivePage::Sliders => {
+                    let slider_area = centered_rect(
+                        CenterOpts {
+                            width: self.sliders.len() as u16 * SliderSection::ITEM_WIDTH,
+                            height: SliderSection::PANEL_HEIGHT,
+                            margin: 0,
+                        },
+                        Rect::new(
+                            area.x,
+                            image_area.bottom().saturating_add(1),
+                            area.width,
+                            SliderSection::PANEL_HEIGHT,
+                        ),
+                    );
+
+                    let slider_section =
+                        SliderSection::new(&self.sliders, self.selected_slider_index, self.layout);
+                    slider_section.render(slider_area, frame.buffer_mut());
+                }
+                ActivePage::Wheels => {
+                    let wheel_area = centered_rect(
+                        CenterOpts {
+                            width: self.wheels.len() as u16 * WheelSection::WIDGET_WIDTH,
+                            height: WheelSection::WIDGET_HEIGHT,
+                            margin: 0,
+                        },
+                        Rect::new(
+                            area.x,
+                            image_area.bottom().saturating_add(1),
+                            area.width,
+                            WheelSection::WIDGET_HEIGHT,
+                        ),
+                    );
+                    let wheel_section =
+                        WheelSection::new(&self.wheels, self.selected_wheel_index, self.layout);
+                    wheel_section.render(wheel_area, frame.buffer_mut());
+                }
+            },
         }
 
         let mut image_section = ImageSection::new(&self.image_handler);
         image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
         image_section.resolution = RESOLUTION[self.selected_resolution_index];
         image_section.render(image_area, frame.buffer_mut());
+
+        if self.layout == AppLayout::Vertical {
+            let page_indicator = page_indicator(self.page);
+            page_indicator.render(
+                Rect {
+                    x: area.x,
+                    y: area.bottom().saturating_sub(1),
+                    width: area.width,
+                    height: 1,
+                },
+                frame.buffer_mut(),
+            );
+        }
     }
 
     fn exit(&mut self) {

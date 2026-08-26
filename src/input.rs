@@ -17,6 +17,7 @@ pub enum Action {
     Save,
     ToggleOriginal,
     ToggleProxy,
+    ToggleLayout,
     None,
 }
 
@@ -29,6 +30,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,
         (_, KeyCode::Char('p')) => Action::ToggleProxy,
         (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
+        (_, KeyCode::Char('o')) => Action::ToggleLayout,
 
         // Navigation
         (_, KeyCode::Tab) => Action::NextTool,
@@ -36,10 +38,22 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('2')) => Action::SwitchToWheels,
 
         // Manipulation
-        (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Action::AdjustValue { delta_x: 0.0, delta_y: 1.0 },
-        (_, KeyCode::Down) | (_, KeyCode::Char('j')) => Action::AdjustValue { delta_x: 0.0, delta_y: -1.0 },
-        (_, KeyCode::Right) | (_, KeyCode::Char('l')) => Action::AdjustValue { delta_x: 1.0, delta_y: 0.0 },
-        (_, KeyCode::Left) | (_, KeyCode::Char('h')) => Action::AdjustValue { delta_x: -1.0, delta_y: 0.0 },
+        (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Action::AdjustValue {
+            delta_x: 0.0,
+            delta_y: 1.0,
+        },
+        (_, KeyCode::Down) | (_, KeyCode::Char('j')) => Action::AdjustValue {
+            delta_x: 0.0,
+            delta_y: -1.0,
+        },
+        (_, KeyCode::Right) | (_, KeyCode::Char('l')) => Action::AdjustValue {
+            delta_x: 1.0,
+            delta_y: 0.0,
+        },
+        (_, KeyCode::Left) | (_, KeyCode::Char('h')) => Action::AdjustValue {
+            delta_x: -1.0,
+            delta_y: 0.0,
+        },
         (_, KeyCode::Char('a')) => Action::ChangeAspectRatio,
         (_, KeyCode::Char('A')) => Action::ChangeResolution,
         (_, KeyCode::Char('r')) => Action::ResetTool,

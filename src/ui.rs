@@ -4,11 +4,13 @@ pub mod wheel;
 
 use ratatui::{
     layout::{Alignment, Margin, Rect},
-    style::Color,
-    text::Text,
+    style::{Color, Style},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType::Rounded, Borders},
 };
 use ratatui_explorer::Theme;
+
+use crate::app::ActivePage;
 
 #[derive(Debug, Copy, Clone)]
 pub struct CenterOpts {
@@ -44,4 +46,15 @@ pub fn file_explorer_theme() -> Theme {
         .with_block(block)
         .add_default_title()
         .with_title_bottom(|_| "<f>: close | <enter>: select | <s>: save".into())
+}
+
+pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
+    let mut sliders = Span::styled("<1>: sliders ", Style::default().fg(Color::DarkGray));
+    let mut wheels = Span::styled("<2>: wheels", Style::default().fg(Color::DarkGray));
+
+    match page {
+        ActivePage::Sliders => sliders = sliders.style(Style::default().fg(Color::White).bold()),
+        ActivePage::Wheels => wheels = wheels.style(Style::default().fg(Color::White).bold()),
+    }
+    Line::from(vec![sliders, " | ".into(), wheels]).alignment(Alignment::Center)
 }
