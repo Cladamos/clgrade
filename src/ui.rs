@@ -1,4 +1,5 @@
 pub mod image;
+pub mod scope;
 pub mod slider;
 pub mod wheel;
 
@@ -51,10 +52,13 @@ pub fn file_explorer_theme() -> Theme {
 pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
     let mut sliders = Span::styled("<1>: sliders ", Style::default().fg(Color::DarkGray));
     let mut wheels = Span::styled("<2>: wheels", Style::default().fg(Color::DarkGray));
+    let mut scopes = Span::styled("<3>: scopes", Style::default().fg(Color::DarkGray));
 
     match page {
         ActivePage::Sliders => sliders = sliders.style(Style::default().fg(Color::White).bold()),
         ActivePage::Wheels => wheels = wheels.style(Style::default().fg(Color::White).bold()),
+        ActivePage::Scopes => scopes = scopes.style(Style::default().fg(Color::White).bold()),
     }
-    Line::from(vec![sliders, " | ".into(), wheels]).alignment(Alignment::Center)
+    Line::from(vec![sliders, " | ".into(), wheels, " | ".into(), scopes])
+        .alignment(Alignment::Center)
 }

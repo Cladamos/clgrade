@@ -77,6 +77,9 @@ impl App {
             Action::SwitchToWheels => {
                 self.page = super::ActivePage::Wheels;
             }
+            Action::SwitchToScopes => {
+                self.page = super::ActivePage::Scopes;
+            }
             Action::ToggleLayout => {
                 self.layout = match self.layout {
                     super::AppLayout::Horizontal => super::AppLayout::Vertical,
@@ -98,6 +101,7 @@ impl App {
                         current_wheel.focused_part = crate::ui::wheel::SelectedPart::LumSlider;
                     }
                 }
+                super::ActivePage::Scopes => {}
             },
             Action::AdjustValue { delta_x, delta_y } => {
                 match self.page {
@@ -132,6 +136,7 @@ impl App {
                             }
                         }
                     }
+                    super::ActivePage::Scopes => {}
                 }
                 self.is_re_render = true;
             }
@@ -171,6 +176,7 @@ impl App {
                     }
                     self.is_re_render = true;
                 }
+                super::ActivePage::Scopes => {}
             },
             Action::ResetAll => {
                 self.sliders

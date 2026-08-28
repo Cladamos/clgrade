@@ -10,6 +10,7 @@ pub enum Action {
     ResetTool,
     SwitchToSliders,
     SwitchToWheels,
+    SwitchToScopes,
     ChangeAspectRatio,
     ChangeResolution,
     ResetAll,
@@ -36,6 +37,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Tab) => Action::NextTool,
         (_, KeyCode::Char('1')) => Action::SwitchToSliders,
         (_, KeyCode::Char('2')) => Action::SwitchToWheels,
+        (_, KeyCode::Char('3')) => Action::SwitchToScopes,
 
         // Manipulation
         (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Action::AdjustValue {

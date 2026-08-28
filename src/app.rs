@@ -14,6 +14,7 @@ use crate::{
         CenterOpts, centered_rect, file_explorer_theme,
         image::ImageSection,
         page_indicator,
+        scope::ScopeSection,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
         wheel::{WheelData, WheelSection, default_wheels},
@@ -30,6 +31,7 @@ const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
 pub enum ActivePage {
     Sliders,
     Wheels,
+    Scopes,
 }
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AppLayout {
@@ -154,10 +156,12 @@ impl App {
                 let controls_height = match self.page {
                     ActivePage::Sliders => SliderSection::PANEL_HEIGHT,
                     ActivePage::Wheels => WheelSection::WIDGET_HEIGHT,
+                    ActivePage::Scopes => ScopeSection::SCOPE_HEIGHT,
                 };
                 let controls_width = match self.page {
                     ActivePage::Sliders => self.sliders.len() as u16 * SliderSection::ITEM_WIDTH,
                     ActivePage::Wheels => self.wheels.len() as u16 * WheelSection::WIDGET_WIDTH,
+                    ActivePage::Scopes => ScopeSection::SCOPE_HEIGHT,
                 };
                 // image borders(2) + info line(1) + gap(1) + controls + page indicator(1)
                 let needed_height = image_size
@@ -178,7 +182,8 @@ impl App {
                     .saturating_add(WheelSection::WIDGET_WIDTH);
                 let slider_stack = self.sliders.len() as u16 * SliderSection::ITEM_HEIGHT;
                 let wheel_stack = self.wheels.len() as u16 * WheelSection::WIDGET_HEIGHT;
-                let needed_height = slider_stack.max(wheel_stack);
+                // max height stack + page indicator(1)
+                let needed_height = slider_stack.max(wheel_stack).saturating_add(1);
                 area.height < needed_height || area.width < needed_width
             }
         };
@@ -290,6 +295,25 @@ impl App {
                         WheelSection::new(&self.wheels, self.selected_wheel_index, self.layout);
                     wheel_section.render(wheel_area, frame.buffer_mut());
                 }
+                ActivePage::Scopes => {
+                    let scope_section = ScopeSection::new(&self.image_handler.scope_data);
+                    scope_section.render(
+                        centered_rect(
+                            CenterOpts {
+                                width: (area.width / 3) * 2,
+                                height: ScopeSection::SCOPE_HEIGHT,
+                                margin: 0,
+                            },
+                            Rect {
+                                x: area.x,
+                                y: image_area.bottom().saturating_add(1),
+                                width: area.width,
+                                height: ScopeSection::SCOPE_HEIGHT,
+                            },
+                        ),
+                        frame.buffer_mut(),
+                    );
+                }
             },
         }
 
@@ -298,18 +322,16 @@ impl App {
         image_section.resolution = RESOLUTION[self.selected_resolution_index];
         image_section.render(image_area, frame.buffer_mut());
 
-        if self.layout == AppLayout::Vertical {
-            let page_indicator = page_indicator(self.page);
-            page_indicator.render(
-                Rect {
-                    x: area.x,
-                    y: area.bottom().saturating_sub(1),
-                    width: area.width,
-                    height: 1,
-                },
-                frame.buffer_mut(),
-            );
-        }
+        let page_indicator = page_indicator(self.page);
+        page_indicator.render(
+            Rect {
+                x: area.x,
+                y: area.bottom().saturating_sub(1),
+                width: area.width,
+                height: 1,
+            },
+            frame.buffer_mut(),
+        );
     }
 
     fn exit(&mut self) {

@@ -150,6 +150,18 @@ impl ColorGrade {
             });
     }
 }
+pub struct ScopeData {
+    pub vectorscope_points: Vec<(f32, f32)>, // Vectorscope: (x, y)
+    pub lum_histogram: [u32; 256],           // Waveform: histogram data
+}
+impl ScopeData {
+    fn new() -> Self {
+        ScopeData {
+            vectorscope_points: Vec::new(),
+            lum_histogram: [0; 256],
+        }
+    }
+}
 
 pub struct ImageHandler {
     pub protocol: Option<Protocol>,
@@ -158,11 +170,12 @@ pub struct ImageHandler {
     pub grade: ColorGrade,
     pub target_size: Size,
     pub is_proxy_enabled: bool,
+    pub scope_data: ScopeData,
 
     path: PathBuf,
     resolution: (u32, u32),
     grade_tx: Option<mpsc::Sender<ColorGrade>>,
-    protocol_rx: Option<mpsc::Receiver<Protocol>>,
+    protocol_rx: Option<mpsc::Receiver<(Protocol, Option<ScopeData>)>>,
     picker: Picker,
 }
 
@@ -176,7 +189,7 @@ impl ImageHandler {
             grade: ColorGrade::default(),
             target_size: Size::new(26, 12),
             is_proxy_enabled: true,
-
+            scope_data: ScopeData::new(),
             path: PathBuf::new(),
             resolution: (360, 360),
             grade_tx: None,
@@ -188,11 +201,14 @@ impl ImageHandler {
     pub fn poll(&mut self) {
         if let Some(ref rx) = self.protocol_rx {
             let mut latest = None;
-            while let Ok(protocol) = rx.try_recv() {
-                latest = Some(protocol);
+            while let Ok(data) = rx.try_recv() {
+                latest = Some(data);
             }
-            if let Some(protocol) = latest {
+            if let Some((protocol, scope_data)) = latest {
                 self.protocol = Some(protocol);
+                if let Some(scope_data) = scope_data {
+                    self.scope_data = scope_data;
+                }
                 self.loading = false;
             }
         }
@@ -207,7 +223,7 @@ impl ImageHandler {
         self.path = path.clone();
 
         let (grade_tx, grade_rx) = mpsc::channel::<ColorGrade>();
-        let (protocol_tx, protocol_rx) = mpsc::channel::<Protocol>();
+        let (protocol_tx, protocol_rx) = mpsc::channel::<(Protocol, Option<ScopeData>)>();
 
         self.grade_tx = Some(grade_tx);
         self.protocol_rx = Some(protocol_rx);
@@ -234,6 +250,8 @@ impl ImageHandler {
             };
             let mut working_proxy = source_proxy.clone();
 
+            let initial_scope =
+                Self::calculate_scopes(&source_high, source_high.width(), source_high.height());
             let initial = picker
                 .new_protocol(
                     DynamicImage::ImageRgba8(source_high.clone()),
@@ -241,7 +259,7 @@ impl ImageHandler {
                     Resize::Scale(Some(Nearest)),
                 )
                 .unwrap();
-            if protocol_tx.send(initial).is_err() {
+            if protocol_tx.send((initial, Some(initial_scope))).is_err() {
                 return;
             }
 
@@ -263,6 +281,12 @@ impl ImageHandler {
                             is_dragging = false;
                             let mut working_high = source_high.clone();
                             last_grade.apply(&source_high, &mut working_high);
+
+                            let scope = Self::calculate_scopes(
+                                &working_high,
+                                working_high.width(),
+                                working_high.height(),
+                            );
                             let protocol = picker
                                 .new_protocol(
                                     DynamicImage::ImageRgba8(working_high),
@@ -270,7 +294,8 @@ impl ImageHandler {
                                     Resize::Scale(Some(Nearest)),
                                 )
                                 .unwrap();
-                            if protocol_tx.send(protocol).is_err() {
+
+                            if protocol_tx.send((protocol, Some(scope))).is_err() {
                                 break;
                             }
                             continue;
@@ -305,12 +330,52 @@ impl ImageHandler {
                         )
                         .unwrap();
 
-                    if protocol_tx.send(protocol).is_err() {
+                    if protocol_tx.send((protocol, None)).is_err() {
                         break;
                     }
                 }
             }
         });
+    }
+
+    pub fn calculate_scopes(image_buffer: &[u8], width: u32, height: u32) -> ScopeData {
+        // TODO: test scopes accuracy
+
+        let mut vectorscope_points = Vec::with_capacity(2500);
+        let mut lum_histogram = [0; 256];
+
+        let total_pixels = width * height;
+        let target_samples = 2500;
+
+        let mut pixel_step = total_pixels / target_samples;
+
+        // Fix getting pixels from same col if width is divisible by pixel_step
+        if pixel_step % 2 == 0 {
+            pixel_step += 1;
+        }
+
+        // We multiply pixel_step by 4 because each pixel is 4 bytes (R, G, B, A)
+        for i in (0..image_buffer.len()).step_by(pixel_step as usize * 4) {
+            let r = image_buffer[i] as f32;
+            let g = image_buffer[i + 1] as f32;
+            let b = image_buffer[i + 2] as f32;
+
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            let bucket = ((lum / 255.0) * 255.0) as usize;
+            lum_histogram[bucket.clamp(0, 255)] += 1;
+
+            // This is standard YUV math normalized to a -1.0 to 1.0 grid
+            let pb = (b - lum) / 255.0; // Blue difference
+            let pr = (r - lum) / 255.0; // Red difference
+
+            // Push to our scatter plot data
+            vectorscope_points.push((pb * 2.0, pr * 2.0));
+        }
+
+        ScopeData {
+            vectorscope_points,
+            lum_histogram,
+        }
     }
 
     pub fn save_to_path(&self, mut export_path: PathBuf) {

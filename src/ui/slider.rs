@@ -105,7 +105,6 @@ impl<'a> SliderSection<'a> {
     }
 }
 
-//TODO: When area is small the value is not visible fix it
 impl<'a> Widget for SliderSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let slider_layout = if self.app_layout == AppLayout::Horizontal {
