@@ -1,11 +1,12 @@
 pub mod image;
+pub mod pipeline;
 pub mod scope;
 pub mod slider;
 pub mod wheel;
 
 use ratatui::{
     layout::{Alignment, Margin, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, BorderType::Rounded, Borders},
 };
@@ -35,6 +36,20 @@ pub fn centered_rect(opts: CenterOpts, r: Rect) -> Rect {
     })
 }
 
+pub fn focused_style(selected: bool) -> Style {
+    if selected {
+        Style::default()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Gray)
+    }
+}
+
+pub fn focused_color(selected: bool) -> Color {
+    if selected { Color::Blue } else { Color::Gray }
+}
+
 pub fn warning_msg<'a>(msg: &'a str) -> Text<'a> {
     Text::from(msg)
         .style(Color::Red)
@@ -53,12 +68,22 @@ pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
     let mut sliders = Span::styled("<1>: sliders ", Style::default().fg(Color::DarkGray));
     let mut wheels = Span::styled("<2>: wheels", Style::default().fg(Color::DarkGray));
     let mut scopes = Span::styled("<3>: scopes", Style::default().fg(Color::DarkGray));
+    let mut pipeline = Span::styled("<4>: pipeline", Style::default().fg(Color::DarkGray));
 
     match page {
         ActivePage::Sliders => sliders = sliders.style(Style::default().fg(Color::White).bold()),
         ActivePage::Wheels => wheels = wheels.style(Style::default().fg(Color::White).bold()),
         ActivePage::Scopes => scopes = scopes.style(Style::default().fg(Color::White).bold()),
+        ActivePage::Pipeline => pipeline = pipeline.style(Style::default().fg(Color::White).bold()),
     }
-    Line::from(vec![sliders, " | ".into(), wheels, " | ".into(), scopes])
-        .alignment(Alignment::Center)
+    Line::from(vec![
+        sliders,
+        " | ".into(),
+        wheels,
+        " | ".into(),
+        scopes,
+        " | ".into(),
+        pipeline,
+    ])
+    .alignment(Alignment::Center)
 }

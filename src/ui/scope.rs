@@ -19,9 +19,9 @@ pub struct ScopeSection<'a> {
 }
 
 impl<'a> ScopeSection<'a> {
-    pub const SCOPE_HEIGHT: u16 = 16;
-    pub const LUM_HISTOGRAM_WIDTH: u16 = 32;
-    pub const VECTORSCOPE_WIDTH: u16 = 32;
+    pub const SCOPE_HEIGHT: u16 = 15;
+    pub const LUM_HISTOGRAM_WIDTH: u16 = 30;
+    pub const VECTORSCOPE_WIDTH: u16 = 30;
 
     pub fn new(scope_data: &'a ScopeData) -> Self {
         ScopeSection { scope_data }
@@ -81,7 +81,8 @@ impl<'a> Widget for ScopeSection<'a> {
             ]);
 
         Block::bordered()
-            .title("Luma Histogram (x: 0 pure black, x: 255 pure white)")
+            .title("Luma Histogram")
+            .title_bottom("(x: 0 pure black, x: 255 pure white)")
             .border_type(Rounded)
             .render(scopes_layout[0], buf);
         Chart::new(vec![dataset])

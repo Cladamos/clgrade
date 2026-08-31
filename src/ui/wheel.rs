@@ -1,6 +1,6 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::Text;
 use ratatui::widgets::BorderType::Rounded;
 use ratatui::widgets::Widget;
@@ -10,6 +10,7 @@ use tui_slider::{Slider, SliderOrientation};
 
 use crate::app::AppLayout;
 use crate::ui::slider::{SliderData, lum_slider};
+use crate::ui::{focused_color, focused_style};
 
 #[derive(PartialEq)]
 pub enum SelectedPart {
@@ -24,17 +25,6 @@ pub struct WheelData {
     pub lum: SliderData,
 }
 
-impl WheelData {
-    fn style(&self, selected: bool) -> Style {
-        if selected {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Gray)
-        }
-    }
-}
 pub struct WheelSection<'a> {
     wheels: &'a [WheelData],
     selected_index: usize,
@@ -117,11 +107,12 @@ impl<'a> Widget for WheelSection<'a> {
                     .height
                     .saturating_sub(Self::LUM_AREA_OFFSET),
             };
+            let style = focused_style(is_wheel_focused);
             Block::default()
                 .title(wheel.label)
                 .borders(Borders::ALL)
                 .border_type(Rounded)
-                .style(wheel.style(is_wheel_focused))
+                .style(style)
                 .render(wheel_area, buf);
 
             let inner_layout = Layout::default()
@@ -135,7 +126,7 @@ impl<'a> Widget for WheelSection<'a> {
                 .split(wheel_area.inner(Margin::new(2, 1)));
 
             Text::from(format!("x:{:.1}, y:{:.1}", wheel.x, wheel.y))
-                .style(wheel.style(is_wheel_focused))
+                .style(style)
                 .alignment(Alignment::Center)
                 .render(inner_layout[3], buf);
             let inner_area = inner_layout[1];
@@ -188,8 +179,10 @@ impl<'a> Widget for WheelSection<'a> {
             let cursor_x = cursor_x.clamp(inner_area.left(), inner_area.right().saturating_sub(1));
             let cursor_y = cursor_y.clamp(inner_area.top(), inner_area.bottom().saturating_sub(1));
 
-            buf.set_string(cursor_x, cursor_y, "+", wheel.style(is_wheel_focused));
+            buf.set_string(cursor_x, cursor_y, "+", style);
 
+            let style = focused_style(is_lum_focused);
+            let color = focused_color(is_lum_focused);
             let slider_area = Rect {
                 x: wheel_layout[index].x,
                 y: wheel_layout[index]
@@ -203,7 +196,7 @@ impl<'a> Widget for WheelSection<'a> {
                 .title(format!("{}: {:.1}", slider.label, slider.state.value()))
                 .borders(Borders::ALL)
                 .border_type(Rounded)
-                .border_style(slider.style(is_lum_focused))
+                .border_style(style)
                 .render(slider_area, buf);
 
             let slider_style = SliderStyle::horizontal();
@@ -212,8 +205,8 @@ impl<'a> Widget for WheelSection<'a> {
                 .filled_symbol(slider_style.filled_symbol)
                 .handle_symbol(slider_style.handle_symbol)
                 .empty_symbol(slider_style.empty_symbol)
-                .filled_color(slider.color(is_lum_focused))
-                .handle_color(slider.color(is_lum_focused))
+                .filled_color(color)
+                .handle_color(color)
                 .empty_color(Color::DarkGray)
                 .render(slider_area.inner(Margin::new(2, 0)), buf);
         }

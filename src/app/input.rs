@@ -1,7 +1,10 @@
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use std::io;
 
-use crate::input::{Action, map_key_to_action};
+use crate::{
+    input::{Action, map_key_to_action},
+    ui::pipeline::ColorEffects,
+};
 
 use super::{ASPECT_RATIOS, App, RESOLUTION, SUPPORTED_FORMATS};
 
@@ -80,6 +83,9 @@ impl App {
             Action::SwitchToScopes => {
                 self.page = super::ActivePage::Scopes;
             }
+            Action::SwitchToPipeline => {
+                self.page = super::ActivePage::Pipeline;
+            }
             Action::ToggleLayout => {
                 self.layout = match self.layout {
                     super::AppLayout::Horizontal => super::AppLayout::Vertical,
@@ -102,6 +108,10 @@ impl App {
                     }
                 }
                 super::ActivePage::Scopes => {}
+                super::ActivePage::Pipeline => {
+                    self.selected_effect_index =
+                        (self.selected_effect_index + 1) % self.effects.len();
+                }
             },
             Action::AdjustValue { delta_x, delta_y } => {
                 match self.page {
@@ -137,6 +147,20 @@ impl App {
                         }
                     }
                     super::ActivePage::Scopes => {}
+                    super::ActivePage::Pipeline => {
+                        let p = &mut self.effects;
+                        let len = p.len();
+                        let i = self.selected_effect_index;
+                        if delta_x > 0.0 {
+                            let next_i = (i + 1) % len;
+                            p.swap(i, next_i);
+                            self.selected_effect_index = next_i;
+                        } else {
+                            let next_i = (i + len - 1) % len;
+                            p.swap(i, next_i);
+                            self.selected_effect_index = next_i;
+                        }
+                    }
                 }
                 self.is_re_render = true;
             }
@@ -177,6 +201,11 @@ impl App {
                     self.is_re_render = true;
                 }
                 super::ActivePage::Scopes => {}
+                super::ActivePage::Pipeline => {
+                    self.effects = ColorEffects::default();
+                    self.selected_effect_index = 0;
+                    self.is_re_render = true;
+                }
             },
             Action::ResetAll => {
                 self.sliders
@@ -188,6 +217,8 @@ impl App {
                     w.lum.state.set_value(w.lum.default_value);
                 });
                 self.is_re_render = true;
+                self.effects = ColorEffects::default();
+                self.selected_effect_index = 0;
             }
             Action::ToggleOriginal => {
                 if key_event.kind == KeyEventKind::Press {

@@ -11,6 +11,7 @@ pub enum Action {
     SwitchToSliders,
     SwitchToWheels,
     SwitchToScopes,
+    SwitchToPipeline,
     ChangeAspectRatio,
     ChangeResolution,
     ResetAll,
@@ -38,6 +39,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('1')) => Action::SwitchToSliders,
         (_, KeyCode::Char('2')) => Action::SwitchToWheels,
         (_, KeyCode::Char('3')) => Action::SwitchToScopes,
+        (_, KeyCode::Char('4')) => Action::SwitchToPipeline,
 
         // Manipulation
         (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Action::AdjustValue {

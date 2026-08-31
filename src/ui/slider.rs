@@ -1,35 +1,22 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Modifier, Style},
+    style::Color,
     text::Text,
     widgets::{Block, BorderType::Rounded, Borders, Widget},
 };
 use tui_slider::{Slider, SliderOrientation, SliderState, style::SliderStyle};
 
-use crate::app::AppLayout;
+use crate::{
+    app::AppLayout,
+    ui::{focused_color, focused_style},
+};
 
 pub struct SliderData {
     pub label: &'static str,
     pub state: SliderState,
     pub step: f64,
     pub default_value: f64,
-}
-
-impl SliderData {
-    pub fn style(&self, selected: bool) -> Style {
-        if selected {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Gray)
-        }
-    }
-
-    pub fn color(&self, selected: bool) -> Color {
-        if selected { Color::Blue } else { Color::Gray }
-    }
 }
 
 pub fn default_sliders() -> Vec<SliderData> {
@@ -128,14 +115,16 @@ impl<'a> Widget for SliderSection<'a> {
         };
 
         for (index, slider) in self.sliders.iter().enumerate() {
-            let is_selected = index == self.selected_index;
+            let is_focused = index == self.selected_index;
+            let style = focused_style(is_focused);
+            let color = focused_color(is_focused);
 
             if self.app_layout == AppLayout::Horizontal {
                 Block::default()
                     .title(format!("{}: {:.1}", slider.label, slider.state.value()))
                     .borders(Borders::ALL)
                     .border_type(Rounded)
-                    .border_style(slider.style(is_selected))
+                    .border_style(style)
                     .render(slider_layout[index], buf);
 
                 let slider_style = SliderStyle::horizontal();
@@ -144,8 +133,8 @@ impl<'a> Widget for SliderSection<'a> {
                     .filled_symbol(slider_style.filled_symbol)
                     .handle_symbol(slider_style.handle_symbol)
                     .empty_symbol(slider_style.empty_symbol)
-                    .filled_color(slider.color(is_selected))
-                    .handle_color(slider.color(is_selected))
+                    .filled_color(color)
+                    .handle_color(color)
                     .empty_color(Color::DarkGray)
                     .render(slider_layout[index].inner(Margin::new(2, 1)), buf);
             } else {
@@ -153,7 +142,7 @@ impl<'a> Widget for SliderSection<'a> {
                     .title(slider.label)
                     .borders(Borders::ALL)
                     .border_type(Rounded)
-                    .border_style(slider.style(is_selected))
+                    .border_style(style)
                     .render(slider_layout[index], buf);
                 let inner_layout = Layout::default()
                     .direction(Direction::Vertical)
@@ -170,12 +159,12 @@ impl<'a> Widget for SliderSection<'a> {
                     .filled_symbol(SliderStyle::vertical().filled_symbol)
                     .handle_symbol(SliderStyle::vertical().handle_symbol)
                     .empty_symbol(SliderStyle::vertical().empty_symbol)
-                    .filled_color(slider.color(is_selected))
-                    .handle_color(slider.color(is_selected))
+                    .filled_color(color)
+                    .handle_color(color)
                     .empty_color(Color::DarkGray)
                     .render(inner_layout[1], buf);
                 Text::from(format!("{:.2}\n", slider.state.value()))
-                    .style(slider.style(is_selected))
+                    .style(style)
                     .alignment(Alignment::Center)
                     .render(inner_layout[3], buf);
             };

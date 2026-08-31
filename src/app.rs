@@ -14,6 +14,7 @@ use crate::{
         CenterOpts, centered_rect, file_explorer_theme,
         image::ImageSection,
         page_indicator,
+        pipeline::{ColorEffects, PipelineSection},
         scope::ScopeSection,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
@@ -32,6 +33,7 @@ pub enum ActivePage {
     Sliders,
     Wheels,
     Scopes,
+    Pipeline,
 }
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AppLayout {
@@ -43,6 +45,7 @@ pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
     wheels: Vec<WheelData>,
+    effects: Vec<ColorEffects>,
     file_explorer: FileExplorer,
 
     page: ActivePage,
@@ -50,6 +53,7 @@ pub struct App {
 
     selected_slider_index: usize,
     selected_wheel_index: usize,
+    selected_effect_index: usize,
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
 
@@ -74,6 +78,7 @@ impl App {
             image_handler: ImageHandler::new(),
             sliders,
             wheels,
+            effects: ColorEffects::default(),
             file_explorer,
 
             page: ActivePage::Sliders,
@@ -81,6 +86,7 @@ impl App {
 
             selected_slider_index: 0,
             selected_wheel_index: 0,
+            selected_effect_index: 0,
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 1,
 
@@ -157,11 +163,13 @@ impl App {
                     ActivePage::Sliders => SliderSection::PANEL_HEIGHT,
                     ActivePage::Wheels => WheelSection::WIDGET_HEIGHT,
                     ActivePage::Scopes => ScopeSection::SCOPE_HEIGHT,
+                    ActivePage::Pipeline => PipelineSection::PIPELINE_HEIGHT,
                 };
                 let controls_width = match self.page {
                     ActivePage::Sliders => self.sliders.len() as u16 * SliderSection::ITEM_WIDTH,
                     ActivePage::Wheels => self.wheels.len() as u16 * WheelSection::WIDGET_WIDTH,
                     ActivePage::Scopes => ScopeSection::SCOPE_HEIGHT,
+                    ActivePage::Pipeline => PipelineSection::PIPELINE_HEIGHT,
                 };
                 // image borders(2) + info line(1) + gap(1) + controls + page indicator(1)
                 let needed_height = image_size
@@ -313,6 +321,27 @@ impl App {
                         ),
                         frame.buffer_mut(),
                     );
+                }
+                ActivePage::Pipeline => {
+                    let pipeline_section =
+                        PipelineSection::new(&self.effects, self.selected_effect_index);
+                    // there is n boxes and n+1 pipes
+                    let pipeline_area = centered_rect(
+                        CenterOpts {
+                            width: self.effects.len() as u16
+                                * (PipelineSection::BOX_WIDTH + PipelineSection::PIPE_WIDTH)
+                                + PipelineSection::PIPE_WIDTH,
+                            height: PipelineSection::PIPELINE_HEIGHT,
+                            margin: 0,
+                        },
+                        Rect {
+                            x: area.x,
+                            y: image_area.bottom().saturating_add(1),
+                            width: area.width,
+                            height: PipelineSection::PIPELINE_HEIGHT,
+                        },
+                    );
+                    pipeline_section.render(pipeline_area, frame.buffer_mut());
                 }
             },
         }

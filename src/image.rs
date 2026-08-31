@@ -53,6 +53,7 @@ impl Default for ColorGrade {
     }
 }
 
+//TODO: Apply pipeline
 impl ColorGrade {
     pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage) {
         let exp_mult = 2.0_f32.powf(self.exposure);
