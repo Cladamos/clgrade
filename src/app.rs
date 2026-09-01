@@ -88,7 +88,7 @@ impl App {
             selected_wheel_index: 0,
             selected_effect_index: 0,
             selected_aspect_ratio_index: 0,
-            selected_resolution_index: 1,
+            selected_resolution_index: 0,
 
             is_show_original: false,
             is_original: false,
@@ -117,30 +117,34 @@ impl App {
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
-                    self.image_handler.apply_effects(ColorGrade::default());
+                    self.image_handler
+                        .apply_effects(ColorGrade::default(), ColorEffects::default());
                     self.is_original = true;
                 }
                 if !self.is_show_original {
-                    self.image_handler.apply_effects(ColorGrade {
-                        //sliders
-                        temperature: self.sliders[0].state.value() as f32,
-                        tint: self.sliders[1].state.value() as f32,
-                        exposure: self.sliders[2].state.value() as f32,
-                        contrast: self.sliders[3].state.value() as f32,
-                        saturation: self.sliders[4].state.value() as f32,
-                        hue_degrees: self.sliders[5].state.value() as f32,
+                    self.image_handler.apply_effects(
+                        ColorGrade {
+                            //sliders
+                            temperature: self.sliders[0].state.value() as f32,
+                            tint: self.sliders[1].state.value() as f32,
+                            exposure: self.sliders[2].state.value() as f32,
+                            contrast: self.sliders[3].state.value() as f32,
+                            saturation: self.sliders[4].state.value() as f32,
+                            hue_degrees: self.sliders[5].state.value() as f32,
 
-                        //wheels
-                        lift_x: self.wheels[0].x,
-                        lift_y: self.wheels[0].y,
-                        lift_lum: self.wheels[0].lum.state.value() as f32,
-                        gamma_x: self.wheels[1].x,
-                        gamma_y: self.wheels[1].y,
-                        gamma_lum: self.wheels[1].lum.state.value() as f32,
-                        gain_x: self.wheels[2].x,
-                        gain_y: self.wheels[2].y,
-                        gain_lum: self.wheels[2].lum.state.value() as f32,
-                    });
+                            //wheels
+                            lift_x: self.wheels[0].x,
+                            lift_y: self.wheels[0].y,
+                            lift_lum: self.wheels[0].lum.state.value() as f32,
+                            gamma_x: self.wheels[1].x,
+                            gamma_y: self.wheels[1].y,
+                            gamma_lum: self.wheels[1].lum.state.value() as f32,
+                            gain_x: self.wheels[2].x,
+                            gain_y: self.wheels[2].y,
+                            gain_lum: self.wheels[2].lum.state.value() as f32,
+                        },
+                        self.effects.clone(),
+                    );
                 }
                 self.is_re_render = false;
             }

@@ -6,7 +6,7 @@ use ratatui::widgets::{Block, Borders, Widget};
 
 use crate::ui::{CenterOpts, centered_rect, focused_style};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ColorEffects {
     WhiteBalance,
     Exposure,

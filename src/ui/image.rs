@@ -18,7 +18,7 @@ impl<'a> ImageSection<'a> {
         ImageSection {
             image_handler,
             aspect_ratio: (1, 1),
-            resolution: 360,
+            resolution: 240,
         }
     }
 }
@@ -38,7 +38,7 @@ impl<'a> Widget for ImageSection<'a> {
         }
 
         if self.image_handler.protocol.is_none() && !self.image_handler.loading {
-            Text::from("Select an image with 'f'")
+            Text::from("File Explorer: 'f'")
                 .fg(Color::DarkGray)
                 .alignment(Alignment::Center)
                 .render(image_layout[1], buf);

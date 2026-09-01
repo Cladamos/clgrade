@@ -10,6 +10,8 @@ use ratatui::layout::Size;
 use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 use rayon::prelude::*;
 
+use crate::ui::pipeline::ColorEffects;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorGrade {
     pub temperature: f32, // -100.0 to 100.0
@@ -53,43 +55,122 @@ impl Default for ColorGrade {
     }
 }
 
-//TODO: Apply pipeline
-impl ColorGrade {
-    pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage) {
-        let exp_mult = 2.0_f32.powf(self.exposure);
-        let cont_factor = (259.0 * (self.contrast + 255.0)) / (255.0 * (259.0 - self.contrast));
+pub struct PrecomputedParams {
+    pub temperature: f32,
+    pub tint: f32,
+    pub exp_mult: f32,
+    pub cont_factor: f32,
+    pub hue_degrees: f32,
+    pub hue_mat: [f32; 9],
+    pub saturation: f32,
+    pub lift_r: f32,
+    pub lift_g: f32,
+    pub lift_b: f32,
+    pub gamma_r: f32,
+    pub gamma_g: f32,
+    pub gamma_b: f32,
+    pub gain_r: f32,
+    pub gain_g: f32,
+    pub gain_b: f32,
+}
 
+impl ColorEffects {
+    pub fn apply(&self, r: &mut f32, g: &mut f32, b: &mut f32, p: &PrecomputedParams) {
+        match self {
+            ColorEffects::WhiteBalance => {
+                *r += p.temperature + p.tint;
+                *g -= p.tint;
+                *b -= p.temperature - p.tint;
+            }
+            ColorEffects::Exposure => {
+                *r *= p.exp_mult;
+                *g *= p.exp_mult;
+                *b *= p.exp_mult;
+            }
+            ColorEffects::Contrast => {
+                *r = p.cont_factor * (*r - 128.0) + 128.0;
+                *g = p.cont_factor * (*g - 128.0) + 128.0;
+                *b = p.cont_factor * (*b - 128.0) + 128.0;
+            }
+            ColorEffects::LiftGammaGain => {
+                let mask_lum = ((0.2126 * *r + 0.7152 * *g + 0.0722 * *b) / 255.0).clamp(0.0, 1.0);
+                let shadow_mask = (1.0 - (mask_lum * 2.0)).clamp(0.0, 1.0);
+                let highlight_mask = ((mask_lum - 0.5) * 2.0).clamp(0.0, 1.0);
+                let midtone_mask = (1.0 - shadow_mask - highlight_mask).clamp(0.0, 1.0);
+
+                *r += (p.lift_r * shadow_mask)
+                    + (p.gamma_r * midtone_mask)
+                    + (p.gain_r * highlight_mask);
+                *g += (p.lift_g * shadow_mask)
+                    + (p.gamma_g * midtone_mask)
+                    + (p.gain_g * highlight_mask);
+                *b += (p.lift_b * shadow_mask)
+                    + (p.gamma_b * midtone_mask)
+                    + (p.gain_b * highlight_mask);
+            }
+            ColorEffects::Hue => {
+                if p.hue_degrees != 0.0 {
+                    let new_r = *r * p.hue_mat[0] + *g * p.hue_mat[1] + *b * p.hue_mat[2];
+                    let new_g = *r * p.hue_mat[3] + *g * p.hue_mat[4] + *b * p.hue_mat[5];
+                    let new_b = *r * p.hue_mat[6] + *g * p.hue_mat[7] + *b * p.hue_mat[8];
+                    *r = new_r;
+                    *g = new_g;
+                    *b = new_b;
+                }
+            }
+            ColorEffects::Saturation => {
+                if p.saturation != 1.0 {
+                    // Rec. 709 Luminance weights
+                    let lum = 0.2126 * *r + 0.7152 * *g + 0.0722 * *b;
+                    *r = lum + (*r - lum) * p.saturation;
+                    *g = lum + (*g - lum) * p.saturation;
+                    *b = lum + (*b - lum) * p.saturation;
+                }
+            }
+        }
+    }
+}
+
+impl ColorGrade {
+    pub fn apply(&self, source: &RgbaImage, working: &mut RgbaImage, pipeline: &[ColorEffects]) {
         let radians = self.hue_degrees.to_radians();
         let cos_a = radians.cos();
         let sin_a = radians.sin();
-        let hue_mat = [
-            0.213 + 0.787 * cos_a - 0.213 * sin_a,
-            0.715 - 0.715 * cos_a - 0.715 * sin_a,
-            0.072 - 0.072 * cos_a + 0.928 * sin_a,
-            0.213 - 0.213 * cos_a + 0.143 * sin_a,
-            0.715 + 0.285 * cos_a + 0.140 * sin_a,
-            0.072 - 0.072 * cos_a - 0.283 * sin_a,
-            0.213 - 0.213 * cos_a - 0.787 * sin_a,
-            0.715 - 0.715 * cos_a + 0.715 * sin_a,
-            0.072 + 0.928 * cos_a + 0.072 * sin_a,
-        ];
 
         // Multiplier for the lift, gamma, gain wheels
         let intensity = 50.0;
-        // Pre calculate Lift (Shadows) Color + Brightness
-        let lift_r = (self.lift_y + self.lift_x) * intensity + self.lift_lum;
-        let lift_g = (self.lift_y - self.lift_x) * intensity + self.lift_lum;
-        let lift_b = (-self.lift_y + self.lift_x) * intensity + self.lift_lum;
 
-        // Pre calculate Gamma (Midtones) Color + Brightness
-        let gamma_r = (self.gamma_y + self.gamma_x) * intensity + self.gamma_lum;
-        let gamma_g = (self.gamma_y - self.gamma_x) * intensity + self.gamma_lum;
-        let gamma_b = (-self.gamma_y + self.gamma_x) * intensity + self.gamma_lum;
-
-        // Pre calculate Gain (Highlights) Color + Brightness
-        let gain_r = (self.gain_y + self.gain_x) * intensity + self.gain_lum;
-        let gain_g = (self.gain_y - self.gain_x) * intensity + self.gain_lum;
-        let gain_b = (-self.gain_y + self.gain_x) * intensity + self.gain_lum;
+        let params = PrecomputedParams {
+            temperature: self.temperature,
+            tint: self.tint,
+            exp_mult: 2.0_f32.powf(self.exposure),
+            cont_factor: (259.0 * (self.contrast + 255.0)) / (255.0 * (259.0 - self.contrast)),
+            hue_degrees: self.hue_degrees,
+            hue_mat: [
+                0.213 + 0.787 * cos_a - 0.213 * sin_a,
+                0.715 - 0.715 * cos_a - 0.715 * sin_a,
+                0.072 - 0.072 * cos_a + 0.928 * sin_a,
+                0.213 - 0.213 * cos_a + 0.143 * sin_a,
+                0.715 + 0.285 * cos_a + 0.140 * sin_a,
+                0.072 - 0.072 * cos_a - 0.283 * sin_a,
+                0.213 - 0.213 * cos_a - 0.787 * sin_a,
+                0.715 - 0.715 * cos_a + 0.715 * sin_a,
+                0.072 + 0.928 * cos_a + 0.072 * sin_a,
+            ],
+            saturation: self.saturation,
+            // Lift (Shadows)
+            lift_r: (self.lift_y + self.lift_x) * intensity + self.lift_lum,
+            lift_g: (self.lift_y - self.lift_x) * intensity + self.lift_lum,
+            lift_b: (-self.lift_y + self.lift_x) * intensity + self.lift_lum,
+            // Gamma (Midtones)
+            gamma_r: (self.gamma_y + self.gamma_x) * intensity + self.gamma_lum,
+            gamma_g: (self.gamma_y - self.gamma_x) * intensity + self.gamma_lum,
+            gamma_b: (-self.gamma_y + self.gamma_x) * intensity + self.gamma_lum,
+            // Gain (Highlights)
+            gain_r: (self.gain_y + self.gain_x) * intensity + self.gain_lum,
+            gain_g: (self.gain_y - self.gain_x) * intensity + self.gain_lum,
+            gain_b: (-self.gain_y + self.gain_x) * intensity + self.gain_lum,
+        };
 
         working
             .par_pixels_mut()
@@ -99,49 +180,8 @@ impl ColorGrade {
                 let mut g = s_px[1] as f32;
                 let mut b = s_px[2] as f32;
 
-                // White Balance (Temperature & Tint)
-                r += self.temperature + self.tint;
-                g -= self.tint;
-                b -= self.temperature - self.tint;
-
-                // Exposure
-                r *= exp_mult;
-                g *= exp_mult;
-                b *= exp_mult;
-
-                // Contrast
-                r = cont_factor * (r - 128.0) + 128.0;
-                g = cont_factor * (g - 128.0) + 128.0;
-                b = cont_factor * (b - 128.0) + 128.0;
-
-                // Lift, gamma, gain
-                let mask_lum = ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0).clamp(0.0, 1.0);
-
-                let shadow_mask = (1.0 - (mask_lum * 2.0)).clamp(0.0, 1.0);
-                let highlight_mask = ((mask_lum - 0.5) * 2.0).clamp(0.0, 1.0);
-                let midtone_mask = (1.0 - shadow_mask - highlight_mask).clamp(0.0, 1.0);
-
-                r += (lift_r * shadow_mask) + (gamma_r * midtone_mask) + (gain_r * highlight_mask);
-                g += (lift_g * shadow_mask) + (gamma_g * midtone_mask) + (gain_g * highlight_mask);
-                b += (lift_b * shadow_mask) + (gamma_b * midtone_mask) + (gain_b * highlight_mask);
-
-                // Hue Rotation
-                if self.hue_degrees != 0.0 {
-                    let hr = r * hue_mat[0] + g * hue_mat[1] + b * hue_mat[2];
-                    let hg = r * hue_mat[3] + g * hue_mat[4] + b * hue_mat[5];
-                    let hb = r * hue_mat[6] + g * hue_mat[7] + b * hue_mat[8];
-                    r = hr;
-                    g = hg;
-                    b = hb;
-                }
-
-                // Saturation
-                if self.saturation != 1.0 {
-                    // Rec. 709 Luminance weights
-                    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                    r = lum + (r - lum) * self.saturation;
-                    g = lum + (g - lum) * self.saturation;
-                    b = lum + (b - lum) * self.saturation;
+                for effect in pipeline {
+                    effect.apply(&mut r, &mut g, &mut b, &params);
                 }
 
                 w_px[0] = r.clamp(0.0, 255.0) as u8;
@@ -169,13 +209,14 @@ pub struct ImageHandler {
     pub image_path: Option<PathBuf>,
     pub loading: bool,
     pub grade: ColorGrade,
+    pub pipeline: Vec<ColorEffects>,
     pub target_size: Size,
     pub is_proxy_enabled: bool,
     pub scope_data: ScopeData,
 
     path: PathBuf,
     resolution: (u32, u32),
-    grade_tx: Option<mpsc::Sender<ColorGrade>>,
+    grade_tx: Option<mpsc::Sender<(ColorGrade, Vec<ColorEffects>)>>,
     protocol_rx: Option<mpsc::Receiver<(Protocol, Option<ScopeData>)>>,
     picker: Picker,
 }
@@ -188,7 +229,8 @@ impl ImageHandler {
             image_path: None,
             loading: false,
             grade: ColorGrade::default(),
-            target_size: Size::new(26, 12),
+            pipeline: ColorEffects::default(),
+            target_size: Size::new(17, 8),
             is_proxy_enabled: true,
             scope_data: ScopeData::new(),
             path: PathBuf::new(),
@@ -223,7 +265,7 @@ impl ImageHandler {
         self.grade = ColorGrade::default();
         self.path = path.clone();
 
-        let (grade_tx, grade_rx) = mpsc::channel::<ColorGrade>();
+        let (grade_tx, grade_rx) = mpsc::channel::<(ColorGrade, Vec<ColorEffects>)>();
         let (protocol_tx, protocol_rx) = mpsc::channel::<(Protocol, Option<ScopeData>)>();
 
         self.grade_tx = Some(grade_tx);
@@ -265,6 +307,8 @@ impl ImageHandler {
             }
 
             let mut last_grade = ColorGrade::default();
+            let mut last_pipeline = ColorEffects::default();
+
             let mut is_dragging = false;
             let timeout = if is_proxy_enabled {
                 Duration::from_millis(200)
@@ -275,13 +319,13 @@ impl ImageHandler {
             let frame_throttle = Duration::from_millis(16);
             let last_render_time = Instant::now();
             loop {
-                let mut grade = if is_dragging {
+                let (mut grade, mut pipeline) = if is_dragging {
                     match grade_rx.recv_timeout(timeout) {
-                        Ok(g) => g,
+                        Ok((g, p)) => (g, p),
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             is_dragging = false;
                             let mut working_high = source_high.clone();
-                            last_grade.apply(&source_high, &mut working_high);
+                            last_grade.apply(&source_high, &mut working_high, &last_pipeline);
 
                             let scope = Self::calculate_scopes(
                                 &working_high,
@@ -311,10 +355,11 @@ impl ImageHandler {
                 };
 
                 while let Ok(newer) = grade_rx.try_recv() {
-                    grade = newer;
+                    (grade, pipeline) = newer;
                 }
 
                 last_grade = grade;
+                last_pipeline = pipeline.clone();
                 is_dragging = true;
 
                 if last_render_time.elapsed() < frame_throttle {
@@ -322,7 +367,7 @@ impl ImageHandler {
                 }
 
                 if let (Some(sp), Some(wp)) = (source_proxy.as_ref(), working_proxy.as_mut()) {
-                    grade.apply(sp, wp);
+                    grade.apply(sp, wp, &pipeline);
                     let protocol = picker
                         .new_protocol(
                             DynamicImage::ImageRgba8(wp.clone()),
@@ -381,6 +426,7 @@ impl ImageHandler {
 
     pub fn save_to_path(&self, mut export_path: PathBuf) {
         let path = self.path.clone();
+        let pipeline = self.pipeline.clone();
         let file_name = path.file_name().unwrap();
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
         export_path.push(file_name);
@@ -393,7 +439,7 @@ impl ImageHandler {
                 .decode()
                 .expect("Failed to decode image");
             let mut export_image = dyn_img.to_rgba8();
-            grade.apply(&dyn_img.to_rgba8(), &mut export_image);
+            grade.apply(&dyn_img.to_rgba8(), &mut export_image, &pipeline);
             match DynamicImage::ImageRgba8(export_image).save(&export_path) {
                 Ok(_) => {}
                 Err(e) => panic!("Failed to save export: {e}"),
@@ -426,10 +472,9 @@ impl ImageHandler {
         }
     }
 
-    pub fn apply_effects(&mut self, grade: ColorGrade) {
-        self.grade = grade;
+    pub fn apply_effects(&mut self, grade: ColorGrade, pipeline: Vec<ColorEffects>) {
         if let Some(ref tx) = self.grade_tx {
-            let _ = tx.send(grade);
+            let _ = tx.send((grade, pipeline));
         }
     }
 }
