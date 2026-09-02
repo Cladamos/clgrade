@@ -385,9 +385,7 @@ impl ImageHandler {
     }
 
     pub fn calculate_scopes(image_buffer: &[u8], width: u32, height: u32) -> ScopeData {
-        // TODO: test scopes accuracy
-
-        let mut vectorscope_points = Vec::with_capacity(2500);
+        let mut vectorscope_points = Vec::with_capacity(512);
         let mut lum_histogram = [0; 256];
 
         let total_pixels = width * height;
@@ -400,6 +398,10 @@ impl ImageHandler {
             pixel_step += 1;
         }
 
+        const PB_DIVISOR: f32 = 255.0 * 1.8556;
+        const PR_DIVISOR: f32 = 255.0 * 1.5748;
+        const SCOPE_SCALE: f32 = 1.678;
+
         // We multiply pixel_step by 4 because each pixel is 4 bytes (R, G, B, A)
         for i in (0..image_buffer.len()).step_by(pixel_step as usize * 4) {
             let r = image_buffer[i] as f32;
@@ -407,15 +409,14 @@ impl ImageHandler {
             let b = image_buffer[i + 2] as f32;
 
             let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            let bucket = ((lum / 255.0) * 255.0) as usize;
+            let bucket = lum.round() as usize;
             lum_histogram[bucket.clamp(0, 255)] += 1;
 
-            // This is standard YUV math normalized to a -1.0 to 1.0 grid
-            let pb = (b - lum) / 255.0; // Blue difference
-            let pr = (r - lum) / 255.0; // Red difference
+            // Scaling to -1.0 to 1.0 grid
+            let pb = (b - lum) / PB_DIVISOR * SCOPE_SCALE; // Blue difference
+            let pr = (r - lum) / PR_DIVISOR * SCOPE_SCALE; // Red difference
 
-            // Push to our scatter plot data
-            vectorscope_points.push((pb * 2.0, pr * 2.0));
+            vectorscope_points.push((pb, pr));
         }
 
         ScopeData {
