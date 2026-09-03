@@ -58,8 +58,8 @@ pub fn default_wheels() -> Vec<WheelData> {
 }
 
 impl<'a> WheelSection<'a> {
-    pub const WIDGET_WIDTH: u16 = 21;
-    pub const WIDGET_HEIGHT: u16 = 16;
+    pub const WHEEL_WIDTH: u16 = 21;
+    pub const WHEEL_HEIGHT: u16 = 16;
     pub const LUM_AREA_OFFSET: u16 = 4;
     pub const LUM_SLIDER_HEIGHT: u16 = 3;
 
@@ -70,29 +70,30 @@ impl<'a> WheelSection<'a> {
             app_layout,
         }
     }
+    pub fn row_width(wheels: &Vec<WheelData>) -> u16 {
+        wheels.len() as u16 * Self::WHEEL_WIDTH
+    }
+
+    pub fn col_height(wheels: &Vec<WheelData>) -> u16 {
+        wheels.len() as u16 * Self::WHEEL_HEIGHT
+    }
 }
 
 impl<'a> Widget for WheelSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let wheel_layout = if self.app_layout == AppLayout::Horizontal {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(
-                    self.wheels
-                        .iter()
-                        .map(|_| Constraint::Length(Self::WIDGET_WIDTH)),
-                )
-                .split(area)
-        } else {
-            Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(
-                    self.wheels
-                        .iter()
-                        .map(|_| Constraint::Length(Self::WIDGET_WIDTH)),
-                )
-                .split(area)
+        let direction = match self.app_layout {
+            AppLayout::Horizontal => Direction::Vertical,
+            AppLayout::Vertical => Direction::Horizontal,
         };
+        let wheel_layout = Layout::default()
+            .direction(direction)
+            .constraints(
+                self.wheels
+                    .iter()
+                    .map(|_| Constraint::Length(Self::WHEEL_WIDTH)),
+            )
+            .split(area);
+
         for (index, wheel) in self.wheels.iter().enumerate() {
             let is_wheel_focused =
                 self.selected_index == index && matches!(wheel.focused_part, SelectedPart::Wheel);

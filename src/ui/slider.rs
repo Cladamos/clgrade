@@ -77,11 +77,11 @@ pub struct SliderSection<'a> {
 
 impl<'a> SliderSection<'a> {
     // Horizontal layout
-    pub const PANEL_WIDTH: u16 = 21;
-    pub const PANEL_HEIGHT: u16 = 15;
+    pub const PANEL_WIDTH: u16 = 30;
+    pub const SLIDER_HEIGHT: u16 = 5;
     // Vertical layout
-    pub const ITEM_WIDTH: u16 = 11;
-    pub const ITEM_HEIGHT: u16 = 5;
+    pub const PANEL_HEIGHT: u16 = 15;
+    pub const SLIDER_WIDTH: u16 = 11;
 
     pub fn new(sliders: &'a [SliderData], selected_index: usize, app_layout: AppLayout) -> Self {
         Self {
@@ -90,29 +90,30 @@ impl<'a> SliderSection<'a> {
             app_layout,
         }
     }
+
+    pub fn row_width(sliders: &Vec<SliderData>) -> u16 {
+        sliders.len() as u16 * Self::SLIDER_WIDTH
+    }
+
+    pub fn col_height(sliders: &Vec<SliderData>) -> u16 {
+        sliders.len() as u16 * Self::SLIDER_HEIGHT
+    }
 }
 
 impl<'a> Widget for SliderSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let slider_layout = if self.app_layout == AppLayout::Horizontal {
-            Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(
-                    self.sliders
-                        .iter()
-                        .map(|_| Constraint::Length(Self::ITEM_HEIGHT)),
-                )
-                .split(area)
-        } else {
-            Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(
-                    self.sliders
-                        .iter()
-                        .map(|_| Constraint::Length(Self::ITEM_WIDTH)),
-                )
-                .split(area)
+        let (slider_lenght, direction) = match self.app_layout {
+            AppLayout::Horizontal => (Self::SLIDER_HEIGHT, Direction::Vertical),
+            AppLayout::Vertical => (Self::SLIDER_WIDTH, Direction::Horizontal),
         };
+        let slider_layout = Layout::default()
+            .direction(direction)
+            .constraints(
+                self.sliders
+                    .iter()
+                    .map(|_| Constraint::Length(slider_lenght)),
+            )
+            .split(area);
 
         for (index, slider) in self.sliders.iter().enumerate() {
             let is_focused = index == self.selected_index;

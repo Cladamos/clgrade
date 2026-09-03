@@ -4,6 +4,7 @@ use ratatui::text::{Line, Text};
 use ratatui::widgets::BorderType::Rounded;
 use ratatui::widgets::{Block, Borders, Widget};
 
+use crate::app::AppLayout;
 use crate::ui::{CenterOpts, centered_rect, focused_style};
 
 #[derive(Debug, Clone, Copy)]
@@ -42,42 +43,95 @@ impl ColorEffects {
 pub struct PipelineSection<'a> {
     pipeline: &'a Vec<ColorEffects>,
     selected_index: usize,
+    app_layout: AppLayout,
 }
 
 impl<'a> PipelineSection<'a> {
-    pub const PIPELINE_HEIGHT: u16 = 5;
+    // Horizontal layout
+    pub const PIPE_HEIGHT: u16 = 1;
+    pub const BOX_HEIGHT: u16 = 5;
+    pub const PIPELINE_WIDTH: u16 = 20;
+    // Vertical layout
     pub const PIPE_WIDTH: u16 = 2;
     pub const BOX_WIDTH: u16 = 10;
+    pub const PIPELINE_HEIGHT: u16 = 5;
 
-    pub fn new(pipeline: &'a Vec<ColorEffects>, selected_index: usize) -> Self {
+    pub fn new(
+        pipeline: &'a Vec<ColorEffects>,
+        selected_index: usize,
+        app_layout: AppLayout,
+    ) -> Self {
         PipelineSection {
             pipeline,
             selected_index,
+            app_layout,
         }
+    }
+
+    pub fn col_height(pipeline: &Vec<ColorEffects>) -> u16 {
+        // n boxes and n+1 pipes
+        pipeline.len() as u16 * (Self::BOX_HEIGHT + Self::PIPE_HEIGHT) + Self::PIPE_HEIGHT
+    }
+
+    pub fn row_width(pipeline: &Vec<ColorEffects>) -> u16 {
+        pipeline.len() as u16 * (Self::BOX_WIDTH + Self::PIPE_WIDTH) + Self::PIPE_WIDTH
     }
 }
 
 impl<'a> Widget for PipelineSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let (
+            widget_direction,
+            pipeline_direction,
+            pipe_length,
+            box_length,
+            pipeline_length,
+            pipe_symbol,
+            last_pipe_symbol,
+        ) = match self.app_layout {
+            AppLayout::Horizontal => (
+                Direction::Horizontal,
+                Direction::Vertical,
+                Self::PIPE_HEIGHT,
+                Self::BOX_HEIGHT,
+                Self::PIPELINE_WIDTH,
+                "|",
+                "v",
+            ),
+            AppLayout::Vertical => (
+                Direction::Vertical,
+                Direction::Horizontal,
+                Self::PIPE_WIDTH,
+                Self::BOX_WIDTH,
+                Self::PIPELINE_HEIGHT,
+                "==",
+                "=>",
+            ),
+        };
+
         let constraints = self
             .pipeline
             .iter()
             .flat_map(|_| {
                 vec![
-                    Constraint::Length(PipelineSection::PIPE_WIDTH),
-                    Constraint::Length(PipelineSection::BOX_WIDTH),
+                    Constraint::Length(pipe_length),
+                    Constraint::Length(box_length),
                 ]
-                .into_iter()
             })
-            .chain(vec![Constraint::Length(PipelineSection::PIPE_WIDTH)]);
+            .chain(vec![Constraint::Length(pipe_length)]);
 
-        let pipeline_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
+        let layout = Layout::default()
+            .direction(widget_direction)
+            .constraints(vec![Constraint::Length(pipeline_length)])
             .split(area);
 
+        let pipeline_layout = Layout::default()
+            .direction(pipeline_direction)
+            .constraints(constraints)
+            .split(layout[0]);
+
         let pipe_center_opts = CenterOpts {
-            width: Self::PIPE_WIDTH,
+            width: pipe_length,
             height: 1,
             margin: 0,
         };
@@ -86,7 +140,7 @@ impl<'a> Widget for PipelineSection<'a> {
             let is_focused = self.selected_index == i;
             let style = focused_style(is_focused);
             let layout_index = i * 2;
-            Line::from("==").style(style).render(
+            Line::from(pipe_symbol).style(style).render(
                 centered_rect(pipe_center_opts, pipeline_layout[layout_index]),
                 buf,
             );
@@ -110,7 +164,7 @@ impl<'a> Widget for PipelineSection<'a> {
             );
 
             if i == self.pipeline.len() - 1 {
-                Line::from("=>").style(style).render(
+                Line::from(last_pipe_symbol).style(style).render(
                     centered_rect(pipe_center_opts, pipeline_layout[layout_index + 2]),
                     buf,
                 );

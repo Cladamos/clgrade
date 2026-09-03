@@ -23,6 +23,9 @@ impl<'a> ScopeSection<'a> {
     pub const LUM_HISTOGRAM_WIDTH: u16 = 30;
     pub const VECTORSCOPE_WIDTH: u16 = 30;
 
+    // +10 for the horizontal gap between sides
+    pub const MIN_WIDTH: u16 = Self::LUM_HISTOGRAM_WIDTH + Self::VECTORSCOPE_WIDTH + 10;
+
     pub fn new(scope_data: &'a ScopeData) -> Self {
         ScopeSection { scope_data }
     }
@@ -31,15 +34,14 @@ impl<'a> ScopeSection<'a> {
 //TODO: add horizontal layout mode to scopes
 impl<'a> Widget for ScopeSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let constraints =
-            if area.width > ScopeSection::VECTORSCOPE_WIDTH + ScopeSection::LUM_HISTOGRAM_WIDTH {
-                vec![
-                    Constraint::Length(area.width - ScopeSection::VECTORSCOPE_WIDTH),
-                    Constraint::Length(ScopeSection::VECTORSCOPE_WIDTH),
-                ]
-            } else {
-                vec![Constraint::Percentage(50), Constraint::Percentage(50)]
-            };
+        let constraints = if area.width > Self::VECTORSCOPE_WIDTH + Self::LUM_HISTOGRAM_WIDTH {
+            vec![
+                Constraint::Length(area.width - Self::VECTORSCOPE_WIDTH),
+                Constraint::Length(Self::VECTORSCOPE_WIDTH),
+            ]
+        } else {
+            vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+        };
         let scopes_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(constraints)
