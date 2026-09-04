@@ -12,6 +12,7 @@ use crate::{
     image::{ColorGrade, ImageHandler},
     ui::{
         CenterOpts, centered_rect, file_explorer_theme,
+        help::HelpSection,
         image::ImageSection,
         page_indicator,
         pipeline::{ColorEffects, PipelineSection},
@@ -28,12 +29,13 @@ const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum ActivePage {
     Sliders,
     Wheels,
     Scopes,
     Pipeline,
+    Help,
 }
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AppLayout {
@@ -226,6 +228,11 @@ impl App {
             return;
         }
 
+        if self.page == ActivePage::Help {
+            frame.render_widget(HelpSection {}, area);
+            return;
+        }
+
         let mut image_area = Rect {
             x: area.x,
             y: area.y,
@@ -298,6 +305,7 @@ impl App {
                         );
                         pipeline_section.render(pipeline_area, frame.buffer_mut());
                     }
+                    ActivePage::Help => {}
                 }
             }
             AppLayout::Vertical => match self.page {
@@ -384,6 +392,7 @@ impl App {
                     );
                     pipeline_section.render(pipeline_area, frame.buffer_mut());
                 }
+                ActivePage::Help => {}
             },
         }
 

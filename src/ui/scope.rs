@@ -35,7 +35,6 @@ impl<'a> ScopeSection<'a> {
     }
 }
 
-//TODO: add horizontal layout mode to scopes
 impl<'a> Widget for ScopeSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let (scope_area, direction, constraints) = match self.app_layout {

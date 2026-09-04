@@ -6,7 +6,7 @@ use crate::{
     ui::pipeline::ColorEffects,
 };
 
-use super::{ASPECT_RATIOS, App, RESOLUTION, SUPPORTED_FORMATS};
+use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION, SUPPORTED_FORMATS};
 
 impl App {
     pub(super) fn handle_events(&mut self) -> io::Result<()> {
@@ -75,29 +75,32 @@ impl App {
                 }
             }
             Action::SwitchToSliders => {
-                self.page = super::ActivePage::Sliders;
+                self.page = ActivePage::Sliders;
             }
             Action::SwitchToWheels => {
-                self.page = super::ActivePage::Wheels;
+                self.page = ActivePage::Wheels;
             }
             Action::SwitchToScopes => {
-                self.page = super::ActivePage::Scopes;
+                self.page = ActivePage::Scopes;
             }
             Action::SwitchToPipeline => {
-                self.page = super::ActivePage::Pipeline;
+                self.page = ActivePage::Pipeline;
+            }
+            Action::SwitchToHelp => {
+                self.page = ActivePage::Help;
             }
             Action::ToggleLayout => {
                 self.layout = match self.layout {
-                    super::AppLayout::Horizontal => super::AppLayout::Vertical,
-                    super::AppLayout::Vertical => super::AppLayout::Horizontal,
+                    AppLayout::Horizontal => AppLayout::Vertical,
+                    AppLayout::Vertical => AppLayout::Horizontal,
                 };
             }
             Action::NextTool => match self.page {
-                super::ActivePage::Sliders => {
+                ActivePage::Sliders => {
                     self.selected_slider_index =
                         (self.selected_slider_index + 1) % self.sliders.len();
                 }
-                super::ActivePage::Wheels => {
+                ActivePage::Wheels => {
                     let current_wheel = &mut self.wheels[self.selected_wheel_index];
                     if current_wheel.focused_part == crate::ui::wheel::SelectedPart::LumSlider {
                         current_wheel.focused_part = crate::ui::wheel::SelectedPart::Wheel;
@@ -107,15 +110,16 @@ impl App {
                         current_wheel.focused_part = crate::ui::wheel::SelectedPart::LumSlider;
                     }
                 }
-                super::ActivePage::Scopes => {}
-                super::ActivePage::Pipeline => {
+                ActivePage::Scopes => {}
+                ActivePage::Pipeline => {
                     self.selected_effect_index =
                         (self.selected_effect_index + 1) % self.effects.len();
                 }
+                ActivePage::Help => {}
             },
             Action::AdjustValue { delta_x, delta_y } => {
                 match self.page {
-                    super::ActivePage::Sliders => {
+                    ActivePage::Sliders => {
                         let s = &mut self.sliders[self.selected_slider_index];
                         let direction = delta_y + delta_x; // one is always 0
                         if direction > 0.0 {
@@ -124,7 +128,7 @@ impl App {
                             s.state.decrease(s.step);
                         }
                     }
-                    super::ActivePage::Wheels => {
+                    ActivePage::Wheels => {
                         let w = &mut self.wheels[self.selected_wheel_index];
                         if w.focused_part == crate::ui::wheel::SelectedPart::Wheel {
                             let step = 0.05;
@@ -146,12 +150,12 @@ impl App {
                             }
                         }
                     }
-                    super::ActivePage::Scopes => {}
-                    super::ActivePage::Pipeline => {
+                    ActivePage::Scopes => {}
+                    ActivePage::Pipeline => {
                         let p = &mut self.effects;
                         let len = p.len();
                         let i = self.selected_effect_index;
-                        let direction = if self.layout == super::AppLayout::Horizontal {
+                        let direction = if self.layout == AppLayout::Horizontal {
                             // In horizontal view, y-axis is inverted for up/down
                             -delta_y + delta_x
                         } else {
@@ -167,6 +171,7 @@ impl App {
                             self.selected_effect_index = next_i;
                         }
                     }
+                    ActivePage::Help => {}
                 }
                 self.is_re_render = true;
             }
@@ -191,12 +196,12 @@ impl App {
                 self.is_re_render = true;
             }
             Action::ResetTool => match self.page {
-                super::ActivePage::Sliders => {
+                ActivePage::Sliders => {
                     let s = &mut self.sliders[self.selected_slider_index];
                     s.state.set_value(s.default_value);
                     self.is_re_render = true;
                 }
-                super::ActivePage::Wheels => {
+                ActivePage::Wheels => {
                     let w = &mut self.wheels[self.selected_wheel_index];
                     if w.focused_part == crate::ui::wheel::SelectedPart::Wheel {
                         w.x = 0.0;
@@ -206,12 +211,13 @@ impl App {
                     }
                     self.is_re_render = true;
                 }
-                super::ActivePage::Scopes => {}
-                super::ActivePage::Pipeline => {
+                ActivePage::Scopes => {}
+                ActivePage::Pipeline => {
                     self.effects = ColorEffects::default();
                     self.selected_effect_index = 0;
                     self.is_re_render = true;
                 }
+                ActivePage::Help => {}
             },
             Action::ResetAll => {
                 self.sliders
