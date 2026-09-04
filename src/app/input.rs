@@ -151,7 +151,13 @@ impl App {
                         let p = &mut self.effects;
                         let len = p.len();
                         let i = self.selected_effect_index;
-                        if delta_x > 0.0 {
+                        let direction = if self.layout == super::AppLayout::Horizontal {
+                            // In horizontal view, y-axis is inverted for up/down
+                            -delta_y + delta_x
+                        } else {
+                            delta_x + delta_y
+                        };
+                        if direction > 0.0 {
                             let next_i = (i + 1) % len;
                             p.swap(i, next_i);
                             self.selected_effect_index = next_i;
