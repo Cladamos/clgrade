@@ -174,7 +174,7 @@ impl App {
                 ];
                 let controls_width = [
                     SliderSection::row_width(&self.sliders),
-                    WheelSection::row_width(&self.wheels),
+                    WheelSection::row_width(&self.wheels, self.layout),
                     ScopeSection::MIN_WIDTH,
                     PipelineSection::row_width(&self.effects),
                 ];
@@ -199,7 +199,7 @@ impl App {
                     .saturating_add(SliderSection::PANEL_WIDTH)
                     .saturating_add(WheelSection::WHEEL_WIDTH);
                 let slider_height = SliderSection::col_height(&self.sliders);
-                let wheel_height = WheelSection::col_height(&self.wheels);
+                let wheel_height = WheelSection::col_height(&self.wheels, self.layout);
                 // max height stack + page indicator(1)
                 needed_height = slider_height.max(wheel_height).saturating_add(1);
                 area.height < needed_height || area.width < needed_width
@@ -266,8 +266,8 @@ impl App {
                     ActivePage::Wheels => {
                         let wheel_area = centered_rect(
                             CenterOpts {
-                                width: WheelSection::WHEEL_WIDTH,
-                                height: WheelSection::col_height(&self.wheels),
+                                width: WheelSection::SMALL_WHEEL_WIDTH,
+                                height: WheelSection::col_height(&self.wheels, self.layout),
                                 margin: 0,
                             },
                             app_layout[1],
@@ -276,7 +276,11 @@ impl App {
                             WheelSection::new(&self.wheels, self.selected_wheel_index, self.layout);
                         wheel_section.render(wheel_area, frame.buffer_mut());
                     }
-                    ActivePage::Scopes => {}
+                    ActivePage::Scopes => {
+                        let scope_section =
+                            ScopeSection::new(&self.image_handler.scope_data, self.layout);
+                        scope_section.render(app_layout[1], frame.buffer_mut());
+                    }
                     ActivePage::Pipeline => {
                         // there is n boxes and n+1 pipes
                         let pipeline_area = centered_rect(
@@ -319,7 +323,7 @@ impl App {
                 ActivePage::Wheels => {
                     let wheel_area = centered_rect(
                         CenterOpts {
-                            width: WheelSection::row_width(&self.wheels),
+                            width: WheelSection::row_width(&self.wheels, self.layout),
                             height: WheelSection::WHEEL_HEIGHT,
                             margin: 0,
                         },
@@ -335,7 +339,8 @@ impl App {
                     wheel_section.render(wheel_area, frame.buffer_mut());
                 }
                 ActivePage::Scopes => {
-                    let scope_section = ScopeSection::new(&self.image_handler.scope_data);
+                    let scope_section =
+                        ScopeSection::new(&self.image_handler.scope_data, self.layout);
                     scope_section.render(
                         centered_rect(
                             CenterOpts {

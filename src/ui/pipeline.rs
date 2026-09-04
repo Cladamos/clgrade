@@ -50,7 +50,7 @@ impl<'a> PipelineSection<'a> {
     // Horizontal layout
     pub const PIPE_HEIGHT: u16 = 1;
     pub const BOX_HEIGHT: u16 = 5;
-    pub const PIPELINE_WIDTH: u16 = 20;
+    pub const PIPELINE_WIDTH: u16 = 21;
     // Vertical layout
     pub const PIPE_WIDTH: u16 = 2;
     pub const BOX_WIDTH: u16 = 10;

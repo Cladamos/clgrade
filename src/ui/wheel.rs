@@ -58,8 +58,14 @@ pub fn default_wheels() -> Vec<WheelData> {
 }
 
 impl<'a> WheelSection<'a> {
+    // Vertical Layout
     pub const WHEEL_WIDTH: u16 = 21;
     pub const WHEEL_HEIGHT: u16 = 16;
+
+    // Horizontal Layout
+    pub const SMALL_WHEEL_WIDTH: u16 = 21;
+    pub const SMALL_WHEEL_HEIGHT: u16 = 14;
+
     pub const LUM_AREA_OFFSET: u16 = 4;
     pub const LUM_SLIDER_HEIGHT: u16 = 3;
 
@@ -70,12 +76,18 @@ impl<'a> WheelSection<'a> {
             app_layout,
         }
     }
-    pub fn row_width(wheels: &Vec<WheelData>) -> u16 {
-        wheels.len() as u16 * Self::WHEEL_WIDTH
+    pub fn row_width(wheels: &Vec<WheelData>, direction: AppLayout) -> u16 {
+        match direction {
+            AppLayout::Horizontal => wheels.len() as u16 * Self::SMALL_WHEEL_WIDTH,
+            AppLayout::Vertical => wheels.len() as u16 * Self::WHEEL_WIDTH,
+        }
     }
 
-    pub fn col_height(wheels: &Vec<WheelData>) -> u16 {
-        wheels.len() as u16 * Self::WHEEL_HEIGHT
+    pub fn col_height(wheels: &Vec<WheelData>, direction: AppLayout) -> u16 {
+        match direction {
+            AppLayout::Horizontal => wheels.len() as u16 * Self::SMALL_WHEEL_HEIGHT,
+            AppLayout::Vertical => wheels.len() as u16 * Self::WHEEL_HEIGHT,
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::image::ScopeData;
+use crate::{app::AppLayout, image::ScopeData};
 
 use ratatui::{
     buffer::Buffer,
@@ -16,6 +16,7 @@ use ratatui::{
 
 pub struct ScopeSection<'a> {
     scope_data: &'a ScopeData,
+    app_layout: AppLayout,
 }
 
 impl<'a> ScopeSection<'a> {
@@ -26,26 +27,61 @@ impl<'a> ScopeSection<'a> {
     // +10 for the horizontal gap between sides
     pub const MIN_WIDTH: u16 = Self::LUM_HISTOGRAM_WIDTH + Self::VECTORSCOPE_WIDTH + 10;
 
-    pub fn new(scope_data: &'a ScopeData) -> Self {
-        ScopeSection { scope_data }
+    pub fn new(scope_data: &'a ScopeData, app_layout: AppLayout) -> Self {
+        ScopeSection {
+            scope_data,
+            app_layout,
+        }
     }
 }
 
 //TODO: add horizontal layout mode to scopes
 impl<'a> Widget for ScopeSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let constraints = if area.width > Self::VECTORSCOPE_WIDTH + Self::LUM_HISTOGRAM_WIDTH {
-            vec![
-                Constraint::Length(area.width - Self::VECTORSCOPE_WIDTH),
-                Constraint::Length(Self::VECTORSCOPE_WIDTH),
-            ]
-        } else {
-            vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+        let (scope_area, direction, constraints) = match self.app_layout {
+            AppLayout::Vertical => (
+                area,
+                Direction::Horizontal,
+                if area.width > Self::VECTORSCOPE_WIDTH + Self::LUM_HISTOGRAM_WIDTH {
+                    vec![
+                        Constraint::Length(area.width.saturating_sub(Self::VECTORSCOPE_WIDTH)),
+                        Constraint::Length(Self::VECTORSCOPE_WIDTH),
+                    ]
+                } else {
+                    vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+                },
+            ),
+            AppLayout::Horizontal => (
+                Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: if area.width < Self::VECTORSCOPE_WIDTH {
+                        area.width
+                    } else {
+                        Self::VECTORSCOPE_WIDTH
+                    },
+                    height: area.height.saturating_sub(2),
+                },
+                Direction::Vertical,
+                if area.width < Self::VECTORSCOPE_WIDTH {
+                    let vectorscope_height = area.width.saturating_div(2);
+                    let histogram_height = area.height.saturating_sub(vectorscope_height);
+                    vec![
+                        Constraint::Length(histogram_height),
+                        Constraint::Length(vectorscope_height),
+                    ]
+                } else {
+                    vec![
+                        Constraint::Length(area.height.saturating_sub(Self::SCOPE_HEIGHT)),
+                        Constraint::Length(Self::SCOPE_HEIGHT),
+                    ]
+                },
+            ),
         };
         let scopes_layout = Layout::default()
-            .direction(Direction::Horizontal)
+            .direction(direction)
             .constraints(constraints)
-            .split(area);
+            .split(scope_area);
         let max_count = self
             .scope_data
             .lum_histogram
@@ -59,7 +95,12 @@ impl<'a> Widget for ScopeSection<'a> {
             .lum_histogram
             .iter()
             .enumerate()
-            .map(|(i, &x)| (i as f64, x as f64))
+            // Swap x and y if layout is horizontal
+            .map(if self.app_layout == AppLayout::Vertical {
+                |(i, &x)| (i as f64, x as f64)
+            } else {
+                |(i, &x)| (x as f64, i as f64)
+            })
             .collect::<Vec<(f64, f64)>>();
 
         let dataset = Dataset::default()
@@ -67,29 +108,40 @@ impl<'a> Widget for ScopeSection<'a> {
             .graph_type(GraphType::Line)
             .data(&luma_histogram);
 
-        let x_axis = Axis::default()
+        let lum_axis = Axis::default()
             .style(Style::default().dark_gray())
             .bounds([0.0, 255.0])
-            .labels(["0", "128", "255"]);
+            .labels(["0(B)", "128", "255(W)"]);
 
-        let y_axis = Axis::default()
+        let pixel_axis = Axis::default()
             .title("Pixel Count")
             .style(Style::default().dark_gray())
             .bounds([0.0, max_count])
-            .labels(vec![
-                Span::raw("0"),
-                Span::raw(format!("{}", (max_count / 2.0) as u64)),
-                Span::raw(format!("{}", max_count as u64)),
-            ]);
+            .labels(if area.width < Self::VECTORSCOPE_WIDTH {
+                vec![Span::raw("0"), Span::raw(format!("{}", max_count as u64))]
+            } else {
+                vec![
+                    Span::raw("0"),
+                    Span::raw(format!("{}", (max_count / 2.0) as u64)),
+                    Span::raw(format!("{}", max_count as u64)),
+                ]
+            });
 
         Block::bordered()
             .title("Luma Histogram")
-            .title_bottom("(x: 0 pure black, x: 255 pure white)")
             .border_type(Rounded)
             .render(scopes_layout[0], buf);
         Chart::new(vec![dataset])
-            .x_axis(x_axis)
-            .y_axis(y_axis)
+            .x_axis(if self.app_layout == AppLayout::Vertical {
+                lum_axis.clone()
+            } else {
+                pixel_axis.clone()
+            })
+            .y_axis(if self.app_layout == AppLayout::Vertical {
+                pixel_axis
+            } else {
+                lum_axis
+            })
             .render(scopes_layout[0].inner(Margin::new(4, 2)), buf);
 
         let vectorscope = Canvas::default()
