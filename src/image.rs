@@ -262,7 +262,6 @@ impl ImageHandler {
 
         self.image_path = Some(path.clone());
         self.loading = true;
-        self.grade = ColorGrade::default();
         self.path = path.clone();
 
         let (grade_tx, grade_rx) = mpsc::channel::<(ColorGrade, Vec<ColorEffects>)>();
@@ -270,6 +269,9 @@ impl ImageHandler {
 
         self.grade_tx = Some(grade_tx);
         self.protocol_rx = Some(protocol_rx);
+
+        let grade = self.grade;
+        let pipeline = self.pipeline.clone();
 
         let picker = self.picker.clone();
         let resolution = self.resolution;
@@ -292,12 +294,14 @@ impl ImageHandler {
                 None
             };
             let mut working_proxy = source_proxy.clone();
+            let mut working_high = source_high.clone();
 
+            grade.apply(&source_high, &mut working_high, &pipeline);
             let initial_scope =
-                Self::calculate_scopes(&source_high, source_high.width(), source_high.height());
+                Self::calculate_scopes(&working_high, working_high.width(), working_high.height());
             let initial = picker
                 .new_protocol(
-                    DynamicImage::ImageRgba8(source_high.clone()),
+                    DynamicImage::ImageRgba8(working_high),
                     target_size,
                     Resize::Scale(Some(Nearest)),
                 )
@@ -324,7 +328,7 @@ impl ImageHandler {
                         Ok((g, p)) => (g, p),
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             is_dragging = false;
-                            let mut working_high = source_high.clone();
+                            working_high = source_high.clone();
                             last_grade.apply(&source_high, &mut working_high, &last_pipeline);
 
                             let scope = Self::calculate_scopes(
