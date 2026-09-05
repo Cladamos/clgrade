@@ -150,6 +150,7 @@ impl App {
             if self.is_image_selected {
                 let path = self.file_explorer.current().path.clone();
                 self.image_handler.load_from_path(path);
+                self.is_re_render = true;
                 self.is_image_selected = false;
             }
             if self.is_directory_selected {

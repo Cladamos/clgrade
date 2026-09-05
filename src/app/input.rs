@@ -18,84 +18,93 @@ impl App {
     pub(super) fn handle_events(&mut self) -> io::Result<()> {
         if event::poll(std::time::Duration::from_millis(16))? {
             let event = event::read()?;
-            match event {
-                Event::Key(key_event) if key_event.kind == KeyEventKind::Press ||  key_event.kind == KeyEventKind::Repeat => {
+
+            if self.is_preset_input_mode {
+                match event {
+                    Event::Key(key_event)
+                        if key_event.kind == KeyEventKind::Press
+                            || key_event.kind == KeyEventKind::Repeat =>
+                    {
+                        self.handle_preset_input_mode_event(key_event);
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+            // I solved same keyevents handling multiple times with disable_next_events
+            // I don't know it is the best way to solve it but it is working for now
+            let disable_next_events = match event {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press || key_event.kind == KeyEventKind::Repeat => {
                     self.handle_key_event(key_event)
                 }
                 Event::Key(key_event)
-                    // I have not any other events to have release action so I am checking the space bar over here
-                    // I can write the space bar release action in here,
-                    // but inside of handle_key_event function it look better
-                    if key_event.kind == KeyEventKind::Release && key_event.code == KeyCode::Char(' ') => {
-                        self.handle_key_event(key_event)
-                    }
-                _ => {}
+                // I have not any other events to have release action so I am checking the space bar over here
+                // I can write the space bar release action in here,
+                // but inside of handle_key_event function it look better
+                if key_event.kind == KeyEventKind::Release && key_event.code == KeyCode::Char(' ') => {
+                    self.handle_key_event(key_event)
+                }
+                _ => false,
+            };
+
+            if disable_next_events {
+                return Ok(());
             }
 
             if self.is_file_explorer_visible {
                 self.file_explorer.handle(&event)?;
+                if self.page == ActivePage::Preset {
+                    return Ok(());
+                }
             }
 
-            if self.page == ActivePage::Preset && !self.is_preset_input_mode {
+            if self.page == ActivePage::Preset {
                 self.preset_explorer.handle(&event)?;
             }
         }
 
         Ok(())
     }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        // Capture all keys before action mapping if preset input mode on
-        if self.is_preset_input_mode {
-            match key_event.code {
-                KeyCode::Char(c) => {
-                    self.preset_input.push(c);
-                }
-                KeyCode::Backspace => {
-                    self.preset_input.pop();
-                }
-                KeyCode::Enter => {
-                    if !self.preset_input.is_empty() {
-                        let data = PresetManager::from_app_state(
-                            &self.sliders,
-                            &self.wheels,
-                            &self.effects,
-                        );
-                        match PresetManager::save(
-                            &self.preset_input,
-                            &data,
-                            self.preset_dir.clone(),
-                        ) {
-                            Ok(_) => {
-                                self.preset_status = Some((
-                                    PresetStatus::Success(format!(
-                                        "Saved: {}.toml",
-                                        self.preset_input
-                                    )),
-                                    Instant::now(),
-                                ));
-                                // Rebuild explorer to show the new file
-                                self.preset_explorer =
-                                    Self::build_preset_explorer(self.preset_dir.clone());
-                            }
-                            Err(e) => {
-                                self.preset_status =
-                                    Some((PresetStatus::Error(format!("{}", e)), Instant::now()));
-                            }
+    fn handle_preset_input_mode_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char(c) => {
+                self.preset_input.push(c);
+            }
+            KeyCode::Backspace => {
+                self.preset_input.pop();
+            }
+            KeyCode::Enter => {
+                if !self.preset_input.is_empty() {
+                    let data =
+                        PresetManager::from_app_state(&self.sliders, &self.wheels, &self.effects);
+                    match PresetManager::save(&self.preset_input, &data, self.preset_dir.clone()) {
+                        Ok(_) => {
+                            self.preset_status = Some((
+                                PresetStatus::Success(format!("Saved: {}.toml", self.preset_input)),
+                                Instant::now(),
+                            ));
+                            // Rebuild explorer to show the new file
+                            self.preset_explorer =
+                                Self::build_preset_explorer(self.preset_dir.clone());
+                        }
+                        Err(e) => {
+                            self.preset_status =
+                                Some((PresetStatus::Error(format!("{}", e)), Instant::now()));
                         }
                     }
-                    self.preset_input.clear();
                     self.is_preset_input_mode = false;
                 }
-                KeyCode::Esc => {
-                    self.preset_input.clear();
-                    self.is_preset_input_mode = false;
-                }
-                _ => {}
+                self.preset_input.clear();
+                self.is_preset_input_mode = false;
             }
-            return;
+            KeyCode::Esc => {
+                self.preset_input.clear();
+                self.is_preset_input_mode = false;
+            }
+            _ => {}
         }
-
+    }
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> bool {
         match map_key_to_action(key_event) {
             Action::ExportImage => {
                 self.file_explorer
@@ -123,7 +132,7 @@ impl App {
             Action::Save => {
                 if self.page == ActivePage::Preset {
                     self.is_preset_input_mode = true;
-                    return;
+                    return true;
                 }
                 if self.is_file_explorer_visible
                     && self.file_explorer.current().is_dir
@@ -151,10 +160,15 @@ impl App {
                                 Some((PresetStatus::Error(e.to_string()), Instant::now()));
                         }
                     }
-                    return;
+                    return true;
                 }
             }
             Action::Select => {
+                if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
+                    self.is_image_selected = true;
+                    self.is_file_explorer_visible = false;
+                    return true;
+                }
                 if self.page == ActivePage::Preset && !self.preset_explorer.current().is_dir {
                     let path = self.preset_explorer.current().path.clone();
                     match PresetManager::load(&path) {
@@ -183,11 +197,6 @@ impl App {
                             ));
                         }
                     }
-                    return;
-                }
-                if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
-                    self.is_image_selected = true;
-                    self.is_file_explorer_visible = false;
                 }
             }
             Action::SwitchToSliders => {
@@ -287,9 +296,7 @@ impl App {
                             self.selected_effect_index = next_i;
                         }
                     }
-                    ActivePage::Preset => {
-                        return;
-                    }
+                    ActivePage::Preset => {}
                 }
                 self.is_re_render = true;
             }
@@ -372,7 +379,8 @@ impl App {
                 self.is_help_view = false;
                 self.is_file_explorer_visible = false;
             }
-            _ => {}
+            _ => return false,
         }
+        false
     }
 }

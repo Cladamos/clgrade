@@ -157,17 +157,17 @@ impl PresetManager {
 
         for wheel in wheels.iter_mut() {
             match wheel.label {
-                "Lift" => {
+                "Lift (Shadows)" => {
                     wheel.x = data.wheels.lift.x;
                     wheel.y = data.wheels.lift.y;
                     wheel.lum.state.set_value(data.wheels.lift.lum);
                 }
-                "Gamma" => {
+                "Gamma (Midtones)" => {
                     wheel.x = data.wheels.gamma.x;
                     wheel.y = data.wheels.gamma.y;
                     wheel.lum.state.set_value(data.wheels.gamma.lum);
                 }
-                "Gain" => {
+                "Gain (Highlights)" => {
                     wheel.x = data.wheels.gain.x;
                     wheel.y = data.wheels.gain.y;
                     wheel.lum.state.set_value(data.wheels.gain.lum);
