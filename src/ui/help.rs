@@ -9,12 +9,10 @@ use ratatui::{
 use super::{CenterOpts, centered_rect};
 
 pub struct HelpSection {}
+
 impl HelpSection {
     pub const WIDTH: u16 = 76;
     pub const HEIGHT: u16 = 21;
-}
-
-impl HelpSection {
     fn section_header(title: &'static str) -> Line<'static> {
         Line::from(vec![
             Span::styled(" ", Style::default()),

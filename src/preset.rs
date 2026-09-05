@@ -23,7 +23,7 @@ pub struct SliderPreset {
     pub hue: f64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct WheelPreset {
     pub x: f32,
     pub y: f32,
@@ -45,7 +45,7 @@ pub struct PipelinePreset {
 pub struct PresetManager;
 
 impl PresetManager {
-    pub fn presets_dir() -> PathBuf {
+    pub fn create_presets_dir() -> PathBuf {
         let dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("clgrade")
@@ -54,8 +54,9 @@ impl PresetManager {
         dir
     }
 
-    pub fn save(name: &str, data: &PresetData) -> io::Result<()> {
-        let path = Self::presets_dir().join(format!("{}.toml", name));
+    pub fn save(name: &str, data: &PresetData, path: PathBuf) -> io::Result<()> {
+        let path = path.join(format!("{}.toml", name));
+        //TODO: gave overwrite option to user
         if path.exists() {
             return Err(Error::new(
                 ErrorKind::AlreadyExists,
@@ -72,11 +73,13 @@ impl PresetManager {
         toml::from_str(&content).map_err(|e| Error::new(io::ErrorKind::Other, e))
     }
 
-    pub fn delete(path: &Path) -> io::Result<()> {
+    pub fn delete(path: &Path, preset_dir: PathBuf) -> io::Result<()> {
         if !path.exists() {
             return Err(Error::new(io::ErrorKind::NotFound, "File not found"));
         }
-        if path.parent() == Some(&Self::presets_dir()) && path.is_file() {
+        if path.canonicalize().unwrap().parent() == Some(&preset_dir.canonicalize().unwrap())
+            && path.is_file()
+        {
             std::fs::remove_file(path)
         } else {
             Err(Error::new(
@@ -91,31 +94,39 @@ impl PresetManager {
         wheels: &[WheelData],
         effects: &[ColorEffects],
     ) -> PresetData {
+        let slider_val = |label: &str| {
+            sliders
+                .iter()
+                .find(|s| s.label == label)
+                .map(|s| s.state.value())
+                .unwrap()
+        };
+
+        let wheel_val = |prefix: &str| {
+            wheels
+                .iter()
+                .find(|w| w.label.starts_with(prefix))
+                .map(|w| WheelPreset {
+                    x: w.x,
+                    y: w.y,
+                    lum: w.lum.state.value(),
+                })
+                .unwrap()
+        };
+
         PresetData {
             sliders: SliderPreset {
-                temperature: sliders[0].state.value(),
-                tint: sliders[1].state.value(),
-                exposure: sliders[2].state.value(),
-                contrast: sliders[3].state.value(),
-                saturation: sliders[4].state.value(),
-                hue: sliders[5].state.value(),
+                temperature: slider_val("Temp"),
+                tint: slider_val("Tint"),
+                exposure: slider_val("Exp"),
+                contrast: slider_val("Cont"),
+                saturation: slider_val("Sat"),
+                hue: slider_val("Hue"),
             },
             wheels: WheelsPreset {
-                lift: WheelPreset {
-                    x: wheels[0].x,
-                    y: wheels[0].y,
-                    lum: wheels[0].lum.state.value(),
-                },
-                gamma: WheelPreset {
-                    x: wheels[1].x,
-                    y: wheels[1].y,
-                    lum: wheels[1].lum.state.value(),
-                },
-                gain: WheelPreset {
-                    x: wheels[2].x,
-                    y: wheels[2].y,
-                    lum: wheels[2].lum.state.value(),
-                },
+                lift: wheel_val("Lift"),
+                gamma: wheel_val("Gamma"),
+                gain: wheel_val("Gain"),
             },
             pipeline: PipelinePreset {
                 order: effects
@@ -132,22 +143,38 @@ impl PresetManager {
         wheels: &mut [WheelData],
         effects: &mut Vec<ColorEffects>,
     ) {
-        sliders[0].state.set_value(data.sliders.temperature);
-        sliders[1].state.set_value(data.sliders.tint);
-        sliders[2].state.set_value(data.sliders.exposure);
-        sliders[3].state.set_value(data.sliders.contrast);
-        sliders[4].state.set_value(data.sliders.saturation);
-        sliders[5].state.set_value(data.sliders.hue);
+        for slider in sliders.iter_mut() {
+            match slider.label {
+                "Temp" => slider.state.set_value(data.sliders.temperature),
+                "Tint" => slider.state.set_value(data.sliders.tint),
+                "Exp" => slider.state.set_value(data.sliders.exposure),
+                "Cont" => slider.state.set_value(data.sliders.contrast),
+                "Sat" => slider.state.set_value(data.sliders.saturation),
+                "Hue" => slider.state.set_value(data.sliders.hue),
+                _ => {}
+            }
+        }
 
-        wheels[0].x = data.wheels.lift.x;
-        wheels[0].y = data.wheels.lift.y;
-        wheels[0].lum.state.set_value(data.wheels.lift.lum);
-        wheels[1].x = data.wheels.gamma.x;
-        wheels[1].y = data.wheels.gamma.y;
-        wheels[1].lum.state.set_value(data.wheels.gamma.lum);
-        wheels[2].x = data.wheels.gain.x;
-        wheels[2].y = data.wheels.gain.y;
-        wheels[2].lum.state.set_value(data.wheels.gain.lum);
+        for wheel in wheels.iter_mut() {
+            match wheel.label {
+                "Lift" => {
+                    wheel.x = data.wheels.lift.x;
+                    wheel.y = data.wheels.lift.y;
+                    wheel.lum.state.set_value(data.wheels.lift.lum);
+                }
+                "Gamma" => {
+                    wheel.x = data.wheels.gamma.x;
+                    wheel.y = data.wheels.gamma.y;
+                    wheel.lum.state.set_value(data.wheels.gamma.lum);
+                }
+                "Gain" => {
+                    wheel.x = data.wheels.gain.x;
+                    wheel.y = data.wheels.gain.y;
+                    wheel.lum.state.set_value(data.wheels.gain.lum);
+                }
+                _ => {}
+            }
+        }
 
         // Pipeline order
         let mut new_effects: Vec<ColorEffects> = Vec::new();

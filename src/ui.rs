@@ -58,20 +58,21 @@ pub fn warning_msg<'a>(msg: &'a str) -> Text<'a> {
         .alignment(Alignment::Center)
 }
 
-pub fn file_explorer_theme() -> Theme {
-    let block = Block::default().borders(Borders::ALL).border_type(Rounded);
-    Theme::default()
-        .with_block(block)
-        .add_default_title()
-        .with_title_bottom(|_| "<f>: close | <enter>: select | <s>: save".into())
+pub enum ExplorerType {
+    File,
+    Preset,
 }
 
-pub fn preset_explorer_theme() -> Theme {
+pub fn explorer_theme(explorer_type: ExplorerType) -> Theme {
     let block = Block::default().borders(Borders::ALL).border_type(Rounded);
+    let bottom_title = match explorer_type {
+        ExplorerType::File => "<f>: close | <enter>: select | <s>: save",
+        ExplorerType::Preset => "<enter>: select | <s>: save | <d/del>: delete",
+    };
     Theme::default()
         .with_block(block)
         .add_default_title()
-        .with_title_bottom(|_| "<enter>: select | <s>: save | <d/del>: delete".into())
+        .with_title_bottom(|_| bottom_title.into())
 }
 
 pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
@@ -91,14 +92,14 @@ pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
         pages
             .iter()
             .enumerate()
-            .map(|(i, (name, active_page))| {
+            .flat_map(|(i, (name, active_page))| {
                 let s = if *active_page == page {
                     selected_style
                 } else {
                     default_style
                 };
                 vec![
-                    Span::styled(format!("{}", name), s),
+                    Span::styled(*name, s),
                     if i == pages.len() - 1 {
                         Span::from("")
                     } else {
@@ -106,7 +107,6 @@ pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
                     },
                 ]
             })
-            .flatten()
             .collect::<Vec<Span>>(),
     )
     .alignment(Alignment::Center)

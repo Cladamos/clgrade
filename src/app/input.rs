@@ -3,6 +3,7 @@ use std::io;
 use std::time::Instant;
 
 use crate::{
+    app::PresetStatus,
     input::{
         Action::{self},
         map_key_to_action,
@@ -60,18 +61,26 @@ impl App {
                             &self.wheels,
                             &self.effects,
                         );
-                        match PresetManager::save(&self.preset_input, &data) {
+                        match PresetManager::save(
+                            &self.preset_input,
+                            &data,
+                            self.preset_dir.clone(),
+                        ) {
                             Ok(_) => {
                                 self.preset_status = Some((
-                                    format!("Saved: {}.toml", self.preset_input),
+                                    PresetStatus::Success(format!(
+                                        "Saved: {}.toml",
+                                        self.preset_input
+                                    )),
                                     Instant::now(),
                                 ));
                                 // Rebuild explorer to show the new file
-                                self.preset_explorer = Self::build_preset_explorer();
+                                self.preset_explorer =
+                                    Self::build_preset_explorer(self.preset_dir.clone());
                             }
                             Err(e) => {
                                 self.preset_status =
-                                    Some((format!("Error: {}", e), Instant::now()));
+                                    Some((PresetStatus::Error(format!("{}", e)), Instant::now()));
                             }
                         }
                     }
@@ -127,17 +136,19 @@ impl App {
             Action::Delete => {
                 if self.page == ActivePage::Preset {
                     let path = self.preset_explorer.current().path.clone();
-                    match PresetManager::delete(&path) {
+                    match PresetManager::delete(&path, self.preset_dir.clone()) {
                         Ok(_) => {
-                            self.preset_status = Some(("Deleted".to_string(), Instant::now()));
-                            // Rebuild explorer to show the new file
-                            self.preset_explorer = Self::build_preset_explorer();
-                        }
-                        Err(e) => {
                             self.preset_status = Some((
-                                "Error deleting: ".to_string() + &e.to_string(),
+                                PresetStatus::Success(String::from("Deleted")),
                                 Instant::now(),
                             ));
+                            // Rebuild explorer to show the new file
+                            self.preset_explorer =
+                                Self::build_preset_explorer(self.preset_dir.clone());
+                        }
+                        Err(e) => {
+                            self.preset_status =
+                                Some((PresetStatus::Error(e.to_string()), Instant::now()));
                         }
                     }
                     return;
@@ -160,11 +171,16 @@ impl App {
                                 .file_stem()
                                 .map(|s| s.to_string_lossy().to_string())
                                 .unwrap_or_default();
-                            self.preset_status =
-                                Some((format!("Loaded: {}", name), Instant::now()));
+                            self.preset_status = Some((
+                                PresetStatus::Success(format!("Loaded: {}", name)),
+                                Instant::now(),
+                            ));
                         }
                         Err(e) => {
-                            self.preset_status = Some((format!("Error: {}", e), Instant::now()));
+                            self.preset_status = Some((
+                                PresetStatus::Error(format!("Error: {}", e)),
+                                Instant::now(),
+                            ));
                         }
                     }
                     return;
@@ -271,7 +287,9 @@ impl App {
                             self.selected_effect_index = next_i;
                         }
                     }
-                    ActivePage::Preset => {}
+                    ActivePage::Preset => {
+                        return;
+                    }
                 }
                 self.is_re_render = true;
             }

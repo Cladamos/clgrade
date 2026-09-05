@@ -6,20 +6,19 @@ use ratatui::{
     widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
-use std::io;
 use std::time::Instant;
+use std::{io, path::PathBuf};
 
 use crate::{
     image::{ColorGrade, ImageHandler},
     preset::PresetManager,
     ui::{
-        CenterOpts, centered_rect, file_explorer_theme,
+        CenterOpts, ExplorerType, centered_rect, explorer_theme,
         help::HelpSection,
         image::ImageSection,
         page_indicator,
         pipeline::{ColorEffects, PipelineSection},
         preset::PresetSection,
-        preset_explorer_theme,
         scope::ScopeSection,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
@@ -46,6 +45,11 @@ pub enum AppLayout {
     Horizontal,
     Vertical,
 }
+#[derive(Debug, Clone, PartialEq)]
+pub enum PresetStatus {
+    Success(String),
+    Error(String),
+}
 
 pub struct App {
     image_handler: ImageHandler,
@@ -55,9 +59,10 @@ pub struct App {
     file_explorer: FileExplorer,
 
     preset_explorer: FileExplorer,
+    preset_dir: PathBuf,
     preset_input: String,
     is_preset_input_mode: bool,
-    preset_status: Option<(String, Instant)>,
+    preset_status: Option<(PresetStatus, Instant)>,
 
     page: ActivePage,
     layout: AppLayout,
@@ -83,9 +88,10 @@ impl App {
     pub fn new() -> Self {
         let sliders = default_sliders();
         let wheels = default_wheels();
-        let theme = file_explorer_theme();
+        let theme = explorer_theme(ExplorerType::File);
         let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
-        let preset_explorer = Self::build_preset_explorer();
+        let preset_dir = PresetManager::create_presets_dir();
+        let preset_explorer = Self::build_preset_explorer(preset_dir.clone());
 
         App {
             image_handler: ImageHandler::new(),
@@ -95,6 +101,7 @@ impl App {
             file_explorer,
 
             preset_explorer,
+            preset_dir,
             preset_input: String::new(),
             is_preset_input_mode: false,
             preset_status: None,
@@ -120,11 +127,10 @@ impl App {
         }
     }
 
-    fn build_preset_explorer() -> FileExplorer {
-        let presets_dir = PresetManager::presets_dir();
-        let theme = preset_explorer_theme();
+    fn build_preset_explorer(preset_dir: PathBuf) -> FileExplorer {
+        let theme = explorer_theme(ExplorerType::Preset);
         FileExplorerBuilder::default()
-            .working_dir(presets_dir)
+            .working_dir(preset_dir)
             .theme(theme)
             .filter_map(|file| {
                 let keep = match file.path.extension() {
@@ -344,11 +350,10 @@ impl App {
                         let (explorer_area, input_area) =
                             PresetSection::layout(app_layout[1], self.layout);
                         frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
-                        let status_str = self.active_preset_status();
                         let preset_section = PresetSection::new(
                             &self.preset_input,
                             self.is_preset_input_mode,
-                            status_str.as_deref(),
+                            self.active_preset_status(),
                         );
                         preset_section.render(input_area, frame.buffer_mut());
                     }
@@ -459,11 +464,10 @@ impl App {
                     let (explorer_area, input_area) =
                         PresetSection::layout(preset_area, self.layout);
                     frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
-                    let status_str = self.active_preset_status();
                     let preset_section = PresetSection::new(
                         &self.preset_input,
                         self.is_preset_input_mode,
-                        status_str.as_deref(),
+                        self.active_preset_status(),
                     );
                     preset_section.render(input_area, frame.buffer_mut());
                 }
@@ -488,10 +492,10 @@ impl App {
         );
     }
 
-    fn active_preset_status(&self) -> Option<String> {
-        if let Some((ref msg, ref time)) = self.preset_status {
-            if time.elapsed().as_secs() < 3 {
-                return Some(msg.clone());
+    fn active_preset_status(&self) -> Option<PresetStatus> {
+        if let Some((ref status, ref time)) = self.preset_status {
+            if time.elapsed().as_secs() < 2 {
+                return Some(status.clone());
             }
         }
         None

@@ -4,19 +4,19 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType::Rounded, Borders, Paragraph, Widget};
 
-use crate::app::AppLayout;
+use crate::app::{AppLayout, PresetStatus};
 
 pub struct PresetSection<'a> {
     pub input: &'a str,
     pub is_input_mode: bool,
-    pub status: Option<&'a str>,
+    pub status: Option<PresetStatus>,
 }
 
 impl<'a> PresetSection<'a> {
     pub const INPUT_HEIGHT: u16 = 3;
     pub const EXPLORER_HEIGHT: u16 = 12;
 
-    pub fn new(input: &'a str, is_input_mode: bool, status: Option<&'a str>) -> Self {
+    pub fn new(input: &'a str, is_input_mode: bool, status: Option<PresetStatus>) -> Self {
         Self {
             input,
             is_input_mode,
@@ -92,16 +92,18 @@ impl Widget for PresetSection<'_> {
                 ),
             ])
         } else if let Some(status) = self.status {
-            Line::from(Span::styled(
-                status,
-                if status.starts_with("Error:") {
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-                } else {
+            Line::from(match status {
+                PresetStatus::Success(msg) => Span::styled(
+                    format!("{msg}"),
                     Style::default()
                         .fg(Color::Blue)
-                        .add_modifier(Modifier::BOLD)
-                },
-            ))
+                        .add_modifier(Modifier::BOLD),
+                ),
+                PresetStatus::Error(msg) => Span::styled(
+                    format!("Error: {msg}"),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+            })
             .alignment(Alignment::Center)
         } else {
             Line::from(Span::styled(
