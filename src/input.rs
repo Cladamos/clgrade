@@ -12,38 +12,33 @@ pub enum Action {
     SwitchToWheels,
     SwitchToScopes,
     SwitchToPipeline,
-    SwitchToHelp,
+    SwitchToPreset,
     ChangeAspectRatio,
     ChangeResolution,
     ResetAll,
     Select,
+    Delete,
     Save,
     ToggleOriginal,
     ToggleProxy,
     ToggleLayout,
+    ToggleHelp,
+    Escape,
     None,
 }
 
 pub fn map_key_to_action(key: KeyEvent) -> Action {
     match (key.modifiers, key.code) {
-        (KeyModifiers::CONTROL, KeyCode::Char('s')) => Action::ExportImage,
-        (_, KeyCode::Char('q')) | (KeyModifiers::CONTROL, KeyCode::Char('c')) => Action::Quit,
-        (_, KeyCode::Enter) => Action::Select,
-        (_, KeyCode::Char('s')) => Action::Save,
-        (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,
-        (_, KeyCode::Char('p')) => Action::ToggleProxy,
-        (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
-        (_, KeyCode::Char('o')) => Action::ToggleLayout,
-
         // Navigation
-        (_, KeyCode::Tab) => Action::NextTool,
         (_, KeyCode::Char('1')) => Action::SwitchToSliders,
         (_, KeyCode::Char('2')) => Action::SwitchToWheels,
         (_, KeyCode::Char('3')) => Action::SwitchToScopes,
         (_, KeyCode::Char('4')) => Action::SwitchToPipeline,
-        (_, KeyCode::Char('?')) => Action::SwitchToHelp,
+        (_, KeyCode::Char('5')) => Action::SwitchToPreset,
+        (_, KeyCode::Tab) => Action::NextTool,
+        (_, KeyCode::Char('?')) => Action::ToggleHelp,
 
-        // Manipulation
+        // Adjustments
         (_, KeyCode::Up) | (_, KeyCode::Char('k')) => Action::AdjustValue {
             delta_x: 0.0,
             delta_y: 1.0,
@@ -60,10 +55,26 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
             delta_x: -1.0,
             delta_y: 0.0,
         },
-        (_, KeyCode::Char('a')) => Action::ChangeAspectRatio,
-        (_, KeyCode::Char('A')) => Action::ChangeResolution,
         (_, KeyCode::Char('r')) => Action::ResetTool,
         (_, KeyCode::Char('R')) => Action::ResetAll,
+
+        // General
+        (_, KeyCode::Char('o')) => Action::ToggleLayout,
+        (_, KeyCode::Char('q')) | (KeyModifiers::CONTROL, KeyCode::Char('c')) => Action::Quit,
+        (_, KeyCode::Esc) => Action::Escape,
+
+        // Preview
+        (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
+        (_, KeyCode::Char('p')) => Action::ToggleProxy,
+        (_, KeyCode::Char('a')) => Action::ChangeAspectRatio,
+        (_, KeyCode::Char('A')) => Action::ChangeResolution,
+
+        // File
+        (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,
+        (_, KeyCode::Enter) => Action::Select,
+        (KeyModifiers::CONTROL, KeyCode::Char('s')) => Action::ExportImage,
+        (_, KeyCode::Char('s')) => Action::Save,
+        (_, KeyCode::Delete | KeyCode::Char('d')) => Action::Delete,
 
         _ => Action::None,
     }

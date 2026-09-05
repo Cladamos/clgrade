@@ -1,6 +1,7 @@
 pub mod help;
 pub mod image;
 pub mod pipeline;
+pub mod preset;
 pub mod scope;
 pub mod slider;
 pub mod wheel;
@@ -65,30 +66,48 @@ pub fn file_explorer_theme() -> Theme {
         .with_title_bottom(|_| "<f>: close | <enter>: select | <s>: save".into())
 }
 
-pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
-    let mut sliders = Span::styled("<1>: sliders ", Style::default().fg(Color::DarkGray));
-    let mut wheels = Span::styled("<2>: wheels", Style::default().fg(Color::DarkGray));
-    let mut scopes = Span::styled("<3>: scopes", Style::default().fg(Color::DarkGray));
-    let mut pipeline = Span::styled("<4>: pipeline", Style::default().fg(Color::DarkGray));
-    let mut help = Span::styled("<?>: help", Style::default().fg(Color::DarkGray));
+pub fn preset_explorer_theme() -> Theme {
+    let block = Block::default().borders(Borders::ALL).border_type(Rounded);
+    Theme::default()
+        .with_block(block)
+        .add_default_title()
+        .with_title_bottom(|_| "<enter>: select | <s>: save | <d/del>: delete".into())
+}
 
-    match page {
-        ActivePage::Sliders => sliders = sliders.style(Style::default().fg(Color::White).bold()),
-        ActivePage::Wheels => wheels = wheels.style(Style::default().fg(Color::White).bold()),
-        ActivePage::Scopes => scopes = scopes.style(Style::default().fg(Color::White).bold()),
-        ActivePage::Pipeline => pipeline = pipeline.style(Style::default().fg(Color::White).bold()),
-        ActivePage::Help => help = help.style(Style::default().fg(Color::White).bold()),
-    }
-    Line::from(vec![
-        sliders,
-        " | ".into(),
-        wheels,
-        " | ".into(),
-        scopes,
-        " | ".into(),
-        pipeline,
-        " | ".into(),
-        help,
-    ])
+pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
+    let default_style = Style::default().fg(Color::DarkGray);
+    let selected_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+    let pages: [(&str, ActivePage); 5] = [
+        ("1: sliders", ActivePage::Sliders),
+        ("2: wheels", ActivePage::Wheels),
+        ("3: scopes", ActivePage::Scopes),
+        ("4: pipeline", ActivePage::Pipeline),
+        ("5: presets", ActivePage::Preset),
+    ];
+
+    Line::from(
+        pages
+            .iter()
+            .enumerate()
+            .map(|(i, (name, active_page))| {
+                let s = if *active_page == page {
+                    selected_style
+                } else {
+                    default_style
+                };
+                vec![
+                    Span::styled(format!("{}", name), s),
+                    if i == pages.len() - 1 {
+                        Span::from("")
+                    } else {
+                        Span::from(" | ")
+                    },
+                ]
+            })
+            .flatten()
+            .collect::<Vec<Span>>(),
+    )
     .alignment(Alignment::Center)
 }

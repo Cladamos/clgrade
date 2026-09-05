@@ -35,6 +35,7 @@ impl<'a> ScopeSection<'a> {
     }
 }
 
+//TODO: Fix scope section is not centered in horizontal layout
 impl<'a> Widget for ScopeSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let (scope_area, direction, constraints) = match self.app_layout {

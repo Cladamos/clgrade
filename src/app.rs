@@ -7,15 +7,19 @@ use ratatui::{
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
 use std::io;
+use std::time::Instant;
 
 use crate::{
     image::{ColorGrade, ImageHandler},
+    preset::PresetManager,
     ui::{
         CenterOpts, centered_rect, file_explorer_theme,
         help::HelpSection,
         image::ImageSection,
         page_indicator,
         pipeline::{ColorEffects, PipelineSection},
+        preset::PresetSection,
+        preset_explorer_theme,
         scope::ScopeSection,
         slider::{SliderData, SliderSection, default_sliders},
         warning_msg,
@@ -35,7 +39,7 @@ pub enum ActivePage {
     Wheels,
     Scopes,
     Pipeline,
-    Help,
+    Preset,
 }
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AppLayout {
@@ -50,6 +54,11 @@ pub struct App {
     effects: Vec<ColorEffects>,
     file_explorer: FileExplorer,
 
+    preset_explorer: FileExplorer,
+    preset_input: String,
+    is_preset_input_mode: bool,
+    preset_status: Option<(String, Instant)>,
+
     page: ActivePage,
     layout: AppLayout,
 
@@ -59,6 +68,7 @@ pub struct App {
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
 
+    is_help_view: bool,
     is_show_original: bool,
     is_original: bool,
     is_re_render: bool,
@@ -75,6 +85,7 @@ impl App {
         let wheels = default_wheels();
         let theme = file_explorer_theme();
         let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
+        let preset_explorer = Self::build_preset_explorer();
 
         App {
             image_handler: ImageHandler::new(),
@@ -82,6 +93,11 @@ impl App {
             wheels,
             effects: ColorEffects::default(),
             file_explorer,
+
+            preset_explorer,
+            preset_input: String::new(),
+            is_preset_input_mode: false,
+            preset_status: None,
 
             page: ActivePage::Sliders,
             layout: AppLayout::Vertical,
@@ -92,6 +108,7 @@ impl App {
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 0,
 
+            is_help_view: false,
             is_show_original: false,
             is_original: false,
             is_re_render: false,
@@ -101,6 +118,23 @@ impl App {
             is_proxy_enabled: true,
             exit: false,
         }
+    }
+
+    fn build_preset_explorer() -> FileExplorer {
+        let presets_dir = PresetManager::presets_dir();
+        let theme = preset_explorer_theme();
+        FileExplorerBuilder::default()
+            .working_dir(presets_dir)
+            .theme(theme)
+            .filter_map(|file| {
+                let keep = match file.path.extension() {
+                    Some(ext) => ext.to_str().unwrap_or_default() == "toml",
+                    None => file.is_dir,
+                };
+                if keep { Some(file) } else { None }
+            })
+            .build()
+            .unwrap()
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -186,7 +220,8 @@ impl App {
                     .saturating_add(3) // image borders + info line
                     .saturating_add(1) // gap between image and controls
                     .saturating_add(*controls_height.iter().max().unwrap())
-                    .saturating_add(1); // page indicator
+                    .saturating_add(1) // page indicator
+                    .max(HelpSection::HEIGHT); // check if help is taller
                 needed_width = image_size
                     .width
                     .saturating_add(2)
@@ -228,7 +263,7 @@ impl App {
             return;
         }
 
-        if self.page == ActivePage::Help {
+        if self.is_help_view {
             frame.render_widget(HelpSection {}, area);
             return;
         }
@@ -305,7 +340,18 @@ impl App {
                         );
                         pipeline_section.render(pipeline_area, frame.buffer_mut());
                     }
-                    ActivePage::Help => {}
+                    ActivePage::Preset => {
+                        let (explorer_area, input_area) =
+                            PresetSection::layout(app_layout[1], self.layout);
+                        frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
+                        let status_str = self.active_preset_status();
+                        let preset_section = PresetSection::new(
+                            &self.preset_input,
+                            self.is_preset_input_mode,
+                            status_str.as_deref(),
+                        );
+                        preset_section.render(input_area, frame.buffer_mut());
+                    }
                 }
             }
             AppLayout::Vertical => match self.page {
@@ -392,7 +438,35 @@ impl App {
                     );
                     pipeline_section.render(pipeline_area, frame.buffer_mut());
                 }
-                ActivePage::Help => {}
+                ActivePage::Preset => {
+                    let preset_area = centered_rect(
+                        CenterOpts {
+                            width: if area.width < 100 {
+                                area.width.saturating_sub(10)
+                            } else {
+                                area.width.saturating_sub(20)
+                            },
+                            height: PresetSection::EXPLORER_HEIGHT + PresetSection::INPUT_HEIGHT,
+                            margin: 0,
+                        },
+                        Rect {
+                            x: area.x,
+                            y: image_area.bottom().saturating_add(1), // image/preset gap
+                            width: area.width,
+                            height: PresetSection::EXPLORER_HEIGHT + PresetSection::INPUT_HEIGHT,
+                        },
+                    );
+                    let (explorer_area, input_area) =
+                        PresetSection::layout(preset_area, self.layout);
+                    frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
+                    let status_str = self.active_preset_status();
+                    let preset_section = PresetSection::new(
+                        &self.preset_input,
+                        self.is_preset_input_mode,
+                        status_str.as_deref(),
+                    );
+                    preset_section.render(input_area, frame.buffer_mut());
+                }
             },
         }
 
@@ -412,6 +486,15 @@ impl App {
             },
             frame.buffer_mut(),
         );
+    }
+
+    fn active_preset_status(&self) -> Option<String> {
+        if let Some((ref msg, ref time)) = self.preset_status {
+            if time.elapsed().as_secs() < 3 {
+                return Some(msg.clone());
+            }
+        }
+        None
     }
 
     fn exit(&mut self) {

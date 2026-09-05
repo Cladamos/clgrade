@@ -37,20 +37,19 @@ impl<'a> Widget for ImageSection<'a> {
             Image::new(protocol).render(image_layout[0].inner(Margin::new(1, 1)), buf);
         }
 
-        if self.image_handler.protocol.is_none() && !self.image_handler.loading {
-            Text::from("File Explorer: 'f'")
-                .fg(Color::DarkGray)
-                .alignment(Alignment::Center)
-                .render(image_layout[1], buf);
+        let bottom_text = if self.image_handler.protocol.is_none() && !self.image_handler.loading {
+            "File Explorer: 'f'"
         }
-
         // TODO: add loading animation, instead of plain text.
-        if self.image_handler.loading {
-            Text::from("Loading...")
-                .fg(Color::DarkGray)
-                .alignment(Alignment::Center)
-                .render(image_layout[1], buf);
-        }
+        else if self.image_handler.loading {
+            "Loading..."
+        } else {
+            ""
+        };
+        Text::from(bottom_text)
+            .fg(Color::DarkGray)
+            .alignment(Alignment::Center)
+            .render(image_layout[1], buf);
 
         let aspect_ratio = format!("{}:{}", self.aspect_ratio.0, self.aspect_ratio.1);
         let resolution = format!("{}p", self.resolution);

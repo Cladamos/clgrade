@@ -38,6 +38,18 @@ impl ColorEffects {
             ColorEffects::Saturation => "SAT",
         }
     }
+
+    pub fn from_short_name(name: &str) -> Option<ColorEffects> {
+        match name {
+            "WB" => Some(ColorEffects::WhiteBalance),
+            "EXP" => Some(ColorEffects::Exposure),
+            "CONT" => Some(ColorEffects::Contrast),
+            "WHEELS" => Some(ColorEffects::LiftGammaGain),
+            "HUE" => Some(ColorEffects::Hue),
+            "SAT" => Some(ColorEffects::Saturation),
+            _ => None,
+        }
+    }
 }
 
 pub struct PipelineSection<'a> {
