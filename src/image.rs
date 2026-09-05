@@ -474,6 +474,9 @@ impl ImageHandler {
     }
 
     pub fn apply_effects(&mut self, grade: ColorGrade, pipeline: Vec<ColorEffects>) {
+        self.grade = grade.clone();
+        self.pipeline = pipeline.clone();
+
         if let Some(ref tx) = self.grade_tx {
             let _ = tx.send((grade, pipeline));
         }

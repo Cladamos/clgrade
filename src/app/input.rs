@@ -130,16 +130,17 @@ impl App {
                 self.is_file_explorer_visible = !self.is_file_explorer_visible
             }
             Action::Save => {
-                if self.page == ActivePage::Preset {
-                    self.is_preset_input_mode = true;
-                    return true;
-                }
                 if self.is_file_explorer_visible
                     && self.file_explorer.current().is_dir
                     && self.image_handler.protocol.is_some()
                 {
                     self.is_directory_selected = true;
                     self.is_file_explorer_visible = false;
+                    return true;
+                }
+                if self.page == ActivePage::Preset {
+                    self.is_preset_input_mode = true;
+                    return true;
                 }
             }
             Action::Delete => {
