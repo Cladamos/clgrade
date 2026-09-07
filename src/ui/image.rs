@@ -1,5 +1,6 @@
 use crate::app::Status;
 use crate::image::ImageHandler;
+use crate::ui::{CenterOpts, centered_rect};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Margin, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
@@ -14,38 +15,44 @@ pub struct ImageSection<'a> {
     pub resolution: u32,
     pub export_status: Option<Status>,
     image_area: Rect,
+    image_center_opts: CenterOpts,
 }
 
 impl<'a> ImageSection<'a> {
-    pub fn new(image_handler: &'a ImageHandler, image_area: Rect) -> Self {
+    pub fn new(
+        image_handler: &'a ImageHandler,
+        image_area: Rect,
+        image_center_opts: CenterOpts,
+    ) -> Self {
         ImageSection {
             image_handler,
             aspect_ratio: (1, 1),
             resolution: 240,
             export_status: None,
             image_area,
+            image_center_opts,
         }
     }
 }
 
 impl<'a> Widget for ImageSection<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let image_section_area = self.image_area;
-        let image_area = Rect {
-            x: image_section_area.x,
-            y: image_section_area.y,
-            width: image_section_area.width,
-            height: image_section_area.height.saturating_sub(1),
+    fn render(self, _: Rect, buf: &mut Buffer) {
+        let image_area_centered = centered_rect(self.image_center_opts, self.image_area);
+        let image = Rect {
+            x: image_area_centered.x,
+            y: image_area_centered.y,
+            width: image_area_centered.width,
+            height: image_area_centered.height.saturating_sub(1),
         };
         let text_area = Rect {
-            x: area.x,
-            y: image_section_area.y + image_section_area.height.saturating_sub(1),
-            width: area.width,
+            x: self.image_area.x,
+            y: image_area_centered.y + image_area_centered.height.saturating_sub(1),
+            width: self.image_area.width,
             height: 1,
         };
 
         if let Some(protocol) = self.image_handler.protocol.as_ref() {
-            Image::new(protocol).render(image_area.inner(Margin::new(1, 1)), buf);
+            Image::new(protocol).render(image.inner(Margin::new(1, 1)), buf);
         }
 
         if let Some(status) = self.export_status {
@@ -89,6 +96,6 @@ impl<'a> Widget for ImageSection<'a> {
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(Rounded)
-            .render(image_area, buf);
+            .render(image, buf);
     }
 }

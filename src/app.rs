@@ -508,8 +508,8 @@ impl App {
             },
         }
 
-        image_area = centered_rect(image_center_opts, image_area);
-        let mut image_section = ImageSection::new(&self.image_handler, image_area);
+        let mut image_section =
+            ImageSection::new(&self.image_handler, image_area, image_center_opts);
         image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
         image_section.resolution = RESOLUTION[self.selected_resolution_index];
         image_section.export_status = self.active_export_status();
