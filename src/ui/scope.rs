@@ -1,4 +1,8 @@
-use crate::{app::AppLayout, image::ScopeData};
+use crate::{
+    app::AppLayout,
+    image::ScopeData,
+    ui::{CenterOpts, centered_rect},
+};
 
 use ratatui::{
     buffer::Buffer,
@@ -52,16 +56,19 @@ impl<'a> Widget for ScopeSection<'a> {
                 },
             ),
             AppLayout::Horizontal => (
-                Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: if area.width < Self::VECTORSCOPE_WIDTH {
-                        area.width
-                    } else {
-                        Self::VECTORSCOPE_WIDTH
+                centered_rect(
+                    CenterOpts {
+                        width: Self::VECTORSCOPE_WIDTH,
+                        height: area.height.saturating_sub(2),
+                        margin: 0,
                     },
-                    height: area.height.saturating_sub(2),
-                },
+                    Rect {
+                        x: area.x,
+                        y: area.y,
+                        width: area.width,
+                        height: area.height.saturating_sub(2),
+                    },
+                ),
                 Direction::Vertical,
                 if area.width < Self::VECTORSCOPE_WIDTH {
                     let vectorscope_height = area.width.saturating_div(2);

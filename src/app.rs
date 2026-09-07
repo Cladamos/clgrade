@@ -40,6 +40,11 @@ pub enum ActivePage {
     Pipeline,
     Preset,
 }
+
+// I am not that happy about my horizontal layout I couldn't align things like I wanted
+// The height of some components like wheels is to much I had to squish them to fit
+// Also I now some help sections are not shows up in presets in horizontal layout if you size small enough
+// I am settling for now maybe later I will be come with better layout
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AppLayout {
     Horizontal,
