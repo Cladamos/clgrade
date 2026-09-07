@@ -25,8 +25,8 @@ pub struct SliderPreset {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct WheelPreset {
-    pub x: f32,
-    pub y: f32,
+    pub x: f64,
+    pub y: f64,
     pub lum: f64,
 }
 
@@ -89,17 +89,24 @@ impl PresetManager {
         }
     }
 
+    /// Round an f64 to given decimal places
+    fn round_f64(val: f64, decimals: u32) -> f64 {
+        let factor = 10_f64.powi(decimals as i32);
+        (val * factor).round() / factor
+    }
+
     pub fn from_app_state(
         sliders: &[SliderData],
         wheels: &[WheelData],
         effects: &[ColorEffects],
     ) -> PresetData {
         let slider_val = |label: &str| {
-            sliders
+            let raw = sliders
                 .iter()
                 .find(|s| s.label == label)
                 .map(|s| s.state.value())
-                .unwrap()
+                .unwrap();
+            Self::round_f64(raw, 4)
         };
 
         let wheel_val = |prefix: &str| {
@@ -107,9 +114,9 @@ impl PresetManager {
                 .iter()
                 .find(|w| w.label.starts_with(prefix))
                 .map(|w| WheelPreset {
-                    x: w.x,
-                    y: w.y,
-                    lum: w.lum.state.value(),
+                    x: Self::round_f64(w.x, 2),
+                    y: Self::round_f64(w.y, 2),
+                    lum: Self::round_f64(w.lum.state.value(), 4),
                 })
                 .unwrap()
         };

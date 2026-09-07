@@ -6,7 +6,7 @@ pub enum Action {
     ExportImage,
     ToggleFileExplorer,
     NextTool,
-    AdjustValue { delta_x: f32, delta_y: f32 },
+    AdjustValue { delta_x: f64, delta_y: f64 },
     ResetTool,
     SwitchToSliders,
     SwitchToWheels,
