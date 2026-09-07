@@ -26,8 +26,6 @@ use crate::{
     },
 };
 
-const SUPPORTED_FORMATS: &[&str] = &["png", "jpg", "jpeg", "webp"];
-
 // I know these can be enum too but I dont know is it worth to implement .next() instead of using them as an array
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
@@ -56,6 +54,8 @@ pub enum PresetStatus {
     Error(String),
 }
 
+//TODO: Add theme section with nearest neighbor method map colors of current image to selected theme
+//TODO: Add 3d LUT support
 pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
@@ -90,7 +90,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(initial_image: Option<PathBuf>) -> Self {
         let sliders = default_sliders();
         let wheels = default_wheels();
         let theme = explorer_theme(ExplorerType::File);
@@ -98,7 +98,7 @@ impl App {
         let preset_dir = PresetManager::create_presets_dir();
         let preset_explorer = Self::build_preset_explorer(preset_dir.clone());
 
-        App {
+        let mut app = App {
             image_handler: ImageHandler::new(),
             sliders,
             wheels,
@@ -129,7 +129,14 @@ impl App {
             is_image_selected: false,
             is_proxy_enabled: true,
             exit: false,
+        };
+
+        if let Some(path) = initial_image {
+            app.image_handler.load_from_path(path);
+            app.is_re_render = true;
         }
+
+        app
     }
 
     fn build_preset_explorer(preset_dir: PathBuf) -> FileExplorer {

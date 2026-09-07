@@ -3,6 +3,7 @@ use std::io;
 use std::time::Instant;
 
 use crate::{
+    SUPPORTED_FORMATS,
     app::PresetStatus,
     input::{
         Action::{self},
@@ -12,7 +13,7 @@ use crate::{
     ui::pipeline::ColorEffects,
 };
 
-use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION, SUPPORTED_FORMATS};
+use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION};
 
 impl App {
     pub(super) fn handle_events(&mut self) -> io::Result<()> {
