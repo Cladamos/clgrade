@@ -429,7 +429,7 @@ impl ImageHandler {
         }
     }
 
-    pub fn save_to_path(&self, mut export_path: PathBuf) {
+    pub fn save_to_path(&self, mut export_path: PathBuf) -> mpsc::Receiver<Result<String, String>> {
         let path = self.path.clone();
         let pipeline = self.pipeline.clone();
         let file_name = path.file_name().unwrap();
@@ -438,18 +438,25 @@ impl ImageHandler {
         export_path.set_extension(format!("output.{}", ext));
 
         let grade = self.grade.clone();
+        let export_path_str = export_path.to_str().unwrap_or_default().to_string();
+
+        let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let dyn_img = image::ImageReader::open(path)
-                .expect("Failed to open image")
-                .decode()
-                .expect("Failed to decode image");
-            let mut export_image = dyn_img.to_rgba8();
-            grade.apply(&dyn_img.to_rgba8(), &mut export_image, &pipeline);
-            match DynamicImage::ImageRgba8(export_image).save(&export_path) {
-                Ok(_) => {}
-                Err(e) => panic!("Failed to save export: {e}"),
-            }
+            let result = (|| {
+                let dyn_img = image::ImageReader::open(path)
+                    .map_err(|e| format!("Failed to open: {e}"))?
+                    .decode()
+                    .map_err(|e| format!("Failed to decode: {e}"))?;
+                let mut export_image = dyn_img.to_rgba8();
+                grade.apply(&dyn_img.to_rgba8(), &mut export_image, &pipeline);
+                DynamicImage::ImageRgba8(export_image)
+                    .save(&export_path)
+                    .map_err(|e| format!("Failed to save: {e}"))?;
+                Ok(export_path_str)
+            })();
+            let _ = tx.send(result);
         });
+        rx
     }
 
     pub fn set_resolution(&mut self, resolution: u32, aspect_ratio: (u8, u8)) {

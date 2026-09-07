@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::{
     SUPPORTED_FORMATS,
-    app::PresetStatus,
+    app::Status,
     input::{
         Action::{self},
         map_key_to_action,
@@ -81,7 +81,7 @@ impl App {
                     match PresetManager::save(&self.preset_input, &data, self.preset_dir.clone()) {
                         Ok(_) => {
                             self.preset_status = Some((
-                                PresetStatus::Success(format!("Saved: {}.toml", self.preset_input)),
+                                Status::Success(format!("Saved: {}.toml", self.preset_input)),
                                 Instant::now(),
                             ));
                             // Rebuild explorer to show the new file
@@ -90,7 +90,7 @@ impl App {
                         }
                         Err(e) => {
                             self.preset_status =
-                                Some((PresetStatus::Error(format!("{}", e)), Instant::now()));
+                                Some((Status::Error(format!("{}", e)), Instant::now()));
                         }
                     }
                     self.is_preset_input_mode = false;
@@ -149,17 +149,15 @@ impl App {
                     let path = self.preset_explorer.current().path.clone();
                     match PresetManager::delete(&path, self.preset_dir.clone()) {
                         Ok(_) => {
-                            self.preset_status = Some((
-                                PresetStatus::Success(String::from("Deleted")),
-                                Instant::now(),
-                            ));
+                            self.preset_status =
+                                Some((Status::Success(String::from("Deleted")), Instant::now()));
                             // Rebuild explorer to show the new file
                             self.preset_explorer =
                                 Self::build_preset_explorer(self.preset_dir.clone());
                         }
                         Err(e) => {
                             self.preset_status =
-                                Some((PresetStatus::Error(e.to_string()), Instant::now()));
+                                Some((Status::Error(e.to_string()), Instant::now()));
                         }
                     }
                     return true;
@@ -188,15 +186,13 @@ impl App {
                                 .map(|s| s.to_string_lossy().to_string())
                                 .unwrap_or_default();
                             self.preset_status = Some((
-                                PresetStatus::Success(format!("Loaded: {}", name)),
+                                Status::Success(format!("Loaded: {}", name)),
                                 Instant::now(),
                             ));
                         }
                         Err(e) => {
-                            self.preset_status = Some((
-                                PresetStatus::Error(format!("Error: {}", e)),
-                                Instant::now(),
-                            ));
+                            self.preset_status =
+                                Some((Status::Error(format!("Error: {}", e)), Instant::now()));
                         }
                     }
                 }

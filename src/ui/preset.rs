@@ -4,19 +4,19 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType::Rounded, Borders, Paragraph, Widget};
 
-use crate::app::{AppLayout, PresetStatus};
+use crate::app::{AppLayout, Status};
 
 pub struct PresetSection<'a> {
     pub input: &'a str,
     pub is_input_mode: bool,
-    pub status: Option<PresetStatus>,
+    pub status: Option<Status>,
 }
 
 impl<'a> PresetSection<'a> {
     pub const INPUT_HEIGHT: u16 = 3;
     pub const EXPLORER_HEIGHT: u16 = 12;
 
-    pub fn new(input: &'a str, is_input_mode: bool, status: Option<PresetStatus>) -> Self {
+    pub fn new(input: &'a str, is_input_mode: bool, status: Option<Status>) -> Self {
         Self {
             input,
             is_input_mode,
@@ -93,13 +93,13 @@ impl Widget for PresetSection<'_> {
             ])
         } else if let Some(status) = self.status {
             Line::from(match status {
-                PresetStatus::Success(msg) => Span::styled(
+                Status::Success(msg) => Span::styled(
                     format!("{msg}"),
                     Style::default()
                         .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
                 ),
-                PresetStatus::Error(msg) => Span::styled(
+                Status::Error(msg) => Span::styled(
                     format!("Error: {msg}"),
                     Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),

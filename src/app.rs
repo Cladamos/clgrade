@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
+use std::sync::mpsc;
 use std::time::Instant;
 use std::{io, path::PathBuf};
 
@@ -49,7 +50,7 @@ pub enum AppLayout {
     Vertical,
 }
 #[derive(Debug, Clone, PartialEq)]
-pub enum PresetStatus {
+pub enum Status {
     Success(String),
     Error(String),
 }
@@ -67,7 +68,7 @@ pub struct App {
     preset_dir: PathBuf,
     preset_input: String,
     is_preset_input_mode: bool,
-    preset_status: Option<(PresetStatus, Instant)>,
+    preset_status: Option<(Status, Instant)>,
 
     page: ActivePage,
     layout: AppLayout,
@@ -83,10 +84,13 @@ pub struct App {
     is_original: bool,
     is_re_render: bool,
     is_file_explorer_visible: bool,
-    is_directory_selected: bool,
     is_image_selected: bool,
     is_proxy_enabled: bool,
     exit: bool,
+
+    is_directory_selected: bool,
+    export_rx: Option<mpsc::Receiver<Result<String, String>>>,
+    export_status: Option<(Status, Instant)>,
 }
 
 impl App {
@@ -129,6 +133,9 @@ impl App {
             is_image_selected: false,
             is_proxy_enabled: true,
             exit: false,
+
+            export_rx: None,
+            export_status: None,
         };
 
         if let Some(path) = initial_image {
@@ -167,8 +174,22 @@ impl App {
             }
             if self.is_directory_selected {
                 let path = self.file_explorer.current().path.clone();
-                self.image_handler.save_to_path(path);
+                self.export_rx = Some(self.image_handler.save_to_path(path));
+                self.export_status =
+                    Some((Status::Success("Exporting...".to_string()), Instant::now()));
                 self.is_directory_selected = false;
+            }
+            if let Some(ref rx) = self.export_rx {
+                if let Ok(result) = rx.try_recv() {
+                    self.export_status = Some((
+                        match result {
+                            Ok(name) => Status::Success(format!("Saved: {name}")),
+                            Err(e) => Status::Error(e),
+                        },
+                        Instant::now(),
+                    ));
+                    self.export_rx = None;
+                }
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
@@ -488,10 +509,11 @@ impl App {
         }
 
         image_area = centered_rect(image_center_opts, image_area);
-        let mut image_section = ImageSection::new(&self.image_handler);
+        let mut image_section = ImageSection::new(&self.image_handler, image_area);
         image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
         image_section.resolution = RESOLUTION[self.selected_resolution_index];
-        image_section.render(image_area, frame.buffer_mut());
+        image_section.export_status = self.active_export_status();
+        image_section.render(area, frame.buffer_mut());
 
         let page_indicator = page_indicator(self.page);
         page_indicator.render(
@@ -505,9 +527,18 @@ impl App {
         );
     }
 
-    fn active_preset_status(&self) -> Option<PresetStatus> {
+    fn active_preset_status(&self) -> Option<Status> {
         if let Some((ref status, ref time)) = self.preset_status {
             if time.elapsed().as_secs() < 2 {
+                return Some(status.clone());
+            }
+        }
+        None
+    }
+
+    fn active_export_status(&self) -> Option<Status> {
+        if let Some((ref status, ref time)) = self.export_status {
+            if time.elapsed().as_secs() < 3 {
                 return Some(status.clone());
             }
         }
