@@ -76,9 +76,9 @@ impl PresetManager {
         if !path.exists() {
             return Err(Error::new(io::ErrorKind::NotFound, "File not found"));
         }
-        if path.canonicalize().unwrap().parent() == Some(&preset_dir.canonicalize().unwrap())
-            && path.is_file()
-        {
+        let canonical_path = path.canonicalize()?;
+        let canonical_dir = preset_dir.canonicalize()?;
+        if canonical_path.parent() == Some(&canonical_dir) && path.is_file() {
             std::fs::remove_file(path)
         } else {
             Err(Error::new(

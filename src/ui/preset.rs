@@ -94,7 +94,7 @@ impl Widget for PresetSection<'_> {
         } else if let Some(status) = self.status {
             Line::from(match status {
                 Status::Success(msg) => Span::styled(
-                    msg.to_string(),
+                    msg,
                     Style::default()
                         .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),

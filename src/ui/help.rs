@@ -96,7 +96,7 @@ impl Widget for HelpSection {
             Self::key_entry("f", "Toggle File Explorer"),
             Self::key_entry("Enter", "Select / Open Image"),
             Self::key_entry("Ctrl+s", "Export Image (Picker)"),
-            Self::key_entry("s", "Save to Directory"),
+            Self::key_entry("s", "Confirm Export"),
             Self::key_entry("Del / d", "Delete Preset"),
         ];
 

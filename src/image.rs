@@ -204,10 +204,13 @@ impl ScopeData {
     }
 }
 
+type ProtocolMessage = Result<(Protocol, Option<ScopeData>), String>;
+
 pub struct ImageHandler {
     pub protocol: Option<Protocol>,
     pub image_path: Option<PathBuf>,
     pub loading: bool,
+    pub load_error: Option<String>,
     pub grade: ColorGrade,
     pub pipeline: Vec<ColorEffects>,
     pub target_size: Size,
@@ -217,7 +220,7 @@ pub struct ImageHandler {
     path: PathBuf,
     resolution: (u32, u32),
     grade_tx: Option<mpsc::Sender<(ColorGrade, Vec<ColorEffects>)>>,
-    protocol_rx: Option<mpsc::Receiver<(Protocol, Option<ScopeData>)>>,
+    protocol_rx: Option<mpsc::Receiver<ProtocolMessage>>,
     picker: Picker,
 }
 
@@ -228,6 +231,7 @@ impl ImageHandler {
             protocol: None,
             image_path: None,
             loading: false,
+            load_error: None,
             grade: ColorGrade::default(),
             pipeline: ColorEffects::default_pipeline(),
             target_size: Size::new(17, 8),
@@ -247,25 +251,34 @@ impl ImageHandler {
             while let Ok(data) = rx.try_recv() {
                 latest = Some(data);
             }
-            if let Some((protocol, scope_data)) = latest {
-                self.protocol = Some(protocol);
-                if let Some(scope_data) = scope_data {
-                    self.scope_data = scope_data;
+            match latest {
+                Some(Ok((protocol, scope_data))) => {
+                    self.protocol = Some(protocol);
+                    if let Some(scope_data) = scope_data {
+                        self.scope_data = scope_data;
+                    }
+                    self.loading = false;
                 }
-                self.loading = false;
+                Some(Err(e)) => {
+                    self.load_error = Some(e);
+                    self.loading = false;
+                    self.protocol_rx = None;
+                }
+                None => {}
             }
         }
     }
 
     pub fn load_from_path(&mut self, path: PathBuf) {
         self.grade_tx = None;
+        self.load_error = None;
 
         self.image_path = Some(path.clone());
         self.loading = true;
         self.path = path.clone();
 
         let (grade_tx, grade_rx) = mpsc::channel::<(ColorGrade, Vec<ColorEffects>)>();
-        let (protocol_tx, protocol_rx) = mpsc::channel::<(Protocol, Option<ScopeData>)>();
+        let (protocol_tx, protocol_rx) = mpsc::channel::<ProtocolMessage>();
 
         self.grade_tx = Some(grade_tx);
         self.protocol_rx = Some(protocol_rx);
@@ -279,10 +292,16 @@ impl ImageHandler {
         let is_proxy_enabled = self.is_proxy_enabled;
 
         thread::spawn(move || {
-            let dyn_img = image::ImageReader::open(path)
-                .expect("Failed to open image")
-                .decode()
-                .expect("Failed to decode image");
+            let dyn_img = match image::ImageReader::open(&path)
+                .map_err(|e| format!("Failed to open: {e}"))
+                .and_then(|r| r.decode().map_err(|e| format!("Failed to decode: {e}")))
+            {
+                Ok(img) => img,
+                Err(e) => {
+                    let _ = protocol_tx.send(Err(e));
+                    return;
+                }
+            };
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
             let source_proxy = if is_proxy_enabled {
                 Some(
@@ -306,7 +325,10 @@ impl ImageHandler {
                     Resize::Scale(Some(Nearest)),
                 )
                 .unwrap();
-            if protocol_tx.send((initial, Some(initial_scope))).is_err() {
+            if protocol_tx
+                .send(Ok((initial, Some(initial_scope))))
+                .is_err()
+            {
                 return;
             }
 
@@ -344,7 +366,7 @@ impl ImageHandler {
                                 )
                                 .unwrap();
 
-                            if protocol_tx.send((protocol, Some(scope))).is_err() {
+                            if protocol_tx.send(Ok((protocol, Some(scope)))).is_err() {
                                 break;
                             }
                             continue;
@@ -380,7 +402,7 @@ impl ImageHandler {
                         )
                         .unwrap();
 
-                    if protocol_tx.send((protocol, None)).is_err() {
+                    if protocol_tx.send(Ok((protocol, None))).is_err() {
                         break;
                     }
                 }
@@ -431,6 +453,20 @@ impl ImageHandler {
 
     pub fn save_to_path(&self, mut export_path: PathBuf) -> mpsc::Receiver<Result<String, String>> {
         let path = self.path.clone();
+        let (tx, rx) = mpsc::channel();
+        if self.protocol.is_none() {
+            let _ = tx.send(Err("No protocol available".to_string()));
+            return rx;
+        }
+        if !path.exists() {
+            let _ = tx.send(Err("Path does not exist".to_string()));
+            return rx;
+        }
+        if path.file_name().is_none() || path.extension().is_none() {
+            let _ = tx.send(Err("Invalid path".to_string()));
+            return rx;
+        }
+
         let pipeline = self.pipeline.clone();
         let file_name = path.file_name().unwrap();
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
@@ -439,8 +475,6 @@ impl ImageHandler {
 
         let grade = self.grade;
         let export_path_str = export_path.to_str().unwrap_or_default().to_string();
-
-        let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let result = (|| {
                 let dyn_img = image::ImageReader::open(path)

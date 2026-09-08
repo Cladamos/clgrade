@@ -102,7 +102,7 @@ impl<'a> SliderSection<'a> {
 
 impl<'a> Widget for SliderSection<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (slider_lenght, direction) = match self.app_layout {
+        let (slider_length, direction) = match self.app_layout {
             AppLayout::Horizontal => (Self::SLIDER_HEIGHT, Direction::Vertical),
             AppLayout::Vertical => (Self::SLIDER_WIDTH, Direction::Horizontal),
         };
@@ -111,7 +111,7 @@ impl<'a> Widget for SliderSection<'a> {
             .constraints(
                 self.sliders
                     .iter()
-                    .map(|_| Constraint::Length(slider_lenght)),
+                    .map(|_| Constraint::Length(slider_length)),
             )
             .split(area);
 

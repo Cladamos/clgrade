@@ -71,6 +71,13 @@ impl<'a> Widget for ImageSection<'a> {
             Text::from(span)
                 .alignment(Alignment::Center)
                 .render(text_area, buf);
+        } else if let Some(ref error) = self.image_handler.load_error {
+            Text::from(Span::styled(
+                error.as_str(),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ))
+            .alignment(Alignment::Center)
+            .render(text_area, buf);
         } else {
             let bottom_text =
                 if self.image_handler.protocol.is_none() && !self.image_handler.loading {

@@ -90,7 +90,7 @@ impl App {
                         }
                         Err(e) => {
                             self.preset_status =
-                                Some((Status::Error(format!("{}", e)), Instant::now()));
+                                Some((Status::Error(e.to_string()), Instant::now()));
                         }
                     }
                     self.is_preset_input_mode = false;
