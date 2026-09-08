@@ -131,7 +131,7 @@ impl App {
             is_file_explorer_visible: false,
             is_directory_selected: false,
             is_image_selected: false,
-            is_proxy_enabled: true,
+            is_proxy_enabled: false,
             exit: false,
 
             export_rx: None,

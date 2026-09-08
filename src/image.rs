@@ -235,7 +235,7 @@ impl ImageHandler {
             grade: ColorGrade::default(),
             pipeline: ColorEffects::default_pipeline(),
             target_size: Size::new(17, 8),
-            is_proxy_enabled: true,
+            is_proxy_enabled: false,
             scope_data: ScopeData::new(),
             path: PathBuf::new(),
             resolution: (360, 360),
