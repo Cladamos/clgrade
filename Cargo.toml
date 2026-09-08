@@ -2,6 +2,12 @@
 name = "clgrade"
 version = "0.1.0"
 edition = "2024"
+description = "A terminal based image color grading application"
+readme = "README.md"
+repository = "https://github.com/cladamos/clgrade"
+license = "MIT"
+keywords = ["tui", "ratatui", "color-grading", "image-processing"]
+categories = ["multimedia::images", "command-line-utilities"]
 
 [dependencies]
 color-eyre = "0.6.5"
@@ -14,3 +20,9 @@ rayon = "1.12.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 tui-slider = "0.3.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = "debuginfo"
