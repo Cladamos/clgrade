@@ -74,7 +74,7 @@ impl<'a> Widget for ImageSection<'a> {
         } else {
             let bottom_text =
                 if self.image_handler.protocol.is_none() && !self.image_handler.loading {
-                    "File Explorer: 'f'"
+                    "f: file explorer | ?: help"
                 }
                 // TODO: add loading animation, instead of plain text.
                 else if self.image_handler.loading {

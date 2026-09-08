@@ -106,7 +106,7 @@ impl App {
             image_handler: ImageHandler::new(),
             sliders,
             wheels,
-            effects: ColorEffects::default(),
+            effects: ColorEffects::default_pipeline(),
             file_explorer,
 
             preset_explorer,
@@ -179,22 +179,22 @@ impl App {
                     Some((Status::Success("Exporting...".to_string()), Instant::now()));
                 self.is_directory_selected = false;
             }
-            if let Some(ref rx) = self.export_rx {
-                if let Ok(result) = rx.try_recv() {
-                    self.export_status = Some((
-                        match result {
-                            Ok(name) => Status::Success(format!("Saved: {name}")),
-                            Err(e) => Status::Error(e),
-                        },
-                        Instant::now(),
-                    ));
-                    self.export_rx = None;
-                }
+            if let Some(ref rx) = self.export_rx
+                && let Ok(result) = rx.try_recv()
+            {
+                self.export_status = Some((
+                    match result {
+                        Ok(name) => Status::Success(format!("Saved: {name}")),
+                        Err(e) => Status::Error(e),
+                    },
+                    Instant::now(),
+                ));
+                self.export_rx = None;
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
                     self.image_handler
-                        .apply_effects(ColorGrade::default(), ColorEffects::default());
+                        .apply_effects(ColorGrade::default(), ColorEffects::default_pipeline());
                     self.is_original = true;
                 }
                 if !self.is_show_original {
@@ -528,19 +528,19 @@ impl App {
     }
 
     fn active_preset_status(&self) -> Option<Status> {
-        if let Some((ref status, ref time)) = self.preset_status {
-            if time.elapsed().as_secs() < 2 {
-                return Some(status.clone());
-            }
+        if let Some((ref status, ref time)) = self.preset_status
+            && time.elapsed().as_secs() < 2
+        {
+            return Some(status.clone());
         }
         None
     }
 
     fn active_export_status(&self) -> Option<Status> {
-        if let Some((ref status, ref time)) = self.export_status {
-            if time.elapsed().as_secs() < 3 {
-                return Some(status.clone());
-            }
+        if let Some((ref status, ref time)) = self.export_status
+            && time.elapsed().as_secs() < 3
+        {
+            return Some(status.clone());
         }
         None
     }

@@ -17,7 +17,7 @@ pub enum ColorEffects {
     Saturation,
 }
 impl ColorEffects {
-    pub fn default() -> Vec<ColorEffects> {
+    pub fn default_pipeline() -> Vec<ColorEffects> {
         vec![
             ColorEffects::WhiteBalance,
             ColorEffects::Exposure,
@@ -80,12 +80,12 @@ impl<'a> PipelineSection<'a> {
         }
     }
 
-    pub fn col_height(pipeline: &Vec<ColorEffects>) -> u16 {
+    pub fn col_height(pipeline: &[ColorEffects]) -> u16 {
         // n boxes and n+1 pipes
         pipeline.len() as u16 * (Self::BOX_HEIGHT + Self::PIPE_HEIGHT) + Self::PIPE_HEIGHT
     }
 
-    pub fn row_width(pipeline: &Vec<ColorEffects>) -> u16 {
+    pub fn row_width(pipeline: &[ColorEffects]) -> u16 {
         pipeline.len() as u16 * (Self::BOX_WIDTH + Self::PIPE_WIDTH) + Self::PIPE_WIDTH
     }
 }

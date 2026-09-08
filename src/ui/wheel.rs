@@ -76,14 +76,14 @@ impl<'a> WheelSection<'a> {
             app_layout,
         }
     }
-    pub fn row_width(wheels: &Vec<WheelData>, direction: AppLayout) -> u16 {
+    pub fn row_width(wheels: &[WheelData], direction: AppLayout) -> u16 {
         match direction {
             AppLayout::Horizontal => wheels.len() as u16 * Self::SMALL_WHEEL_WIDTH,
             AppLayout::Vertical => wheels.len() as u16 * Self::WHEEL_WIDTH,
         }
     }
 
-    pub fn col_height(wheels: &Vec<WheelData>, direction: AppLayout) -> u16 {
+    pub fn col_height(wheels: &[WheelData], direction: AppLayout) -> u16 {
         match direction {
             AppLayout::Horizontal => wheels.len() as u16 * Self::SMALL_WHEEL_HEIGHT,
             AppLayout::Vertical => wheels.len() as u16 * Self::WHEEL_HEIGHT,

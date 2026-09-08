@@ -91,11 +91,11 @@ impl<'a> SliderSection<'a> {
         }
     }
 
-    pub fn row_width(sliders: &Vec<SliderData>) -> u16 {
+    pub fn row_width(sliders: &[SliderData]) -> u16 {
         sliders.len() as u16 * Self::SLIDER_WIDTH
     }
 
-    pub fn col_height(sliders: &Vec<SliderData>) -> u16 {
+    pub fn col_height(sliders: &[SliderData]) -> u16 {
         sliders.len() as u16 * Self::SLIDER_HEIGHT
     }
 }

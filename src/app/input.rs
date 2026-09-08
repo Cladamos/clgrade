@@ -336,7 +336,7 @@ impl App {
                 }
                 ActivePage::Scopes => {}
                 ActivePage::Pipeline => {
-                    self.effects = ColorEffects::default();
+                    self.effects = ColorEffects::default_pipeline();
                     self.selected_effect_index = 0;
                     self.is_re_render = true;
                 }
@@ -352,7 +352,7 @@ impl App {
                     w.lum.state.set_value(w.lum.default_value);
                 });
                 self.is_re_render = true;
-                self.effects = ColorEffects::default();
+                self.effects = ColorEffects::default_pipeline();
                 self.selected_effect_index = 0;
             }
             Action::ToggleHelp => self.is_help_view = !self.is_help_view,

@@ -63,14 +63,13 @@ impl PresetManager {
                 "Preset already exists",
             ));
         }
-        let content =
-            toml::to_string_pretty(data).map_err(|e| Error::new(io::ErrorKind::Other, e))?;
+        let content = toml::to_string_pretty(data).map_err(Error::other)?;
         std::fs::write(path, content)
     }
 
     pub fn load(path: &Path) -> io::Result<PresetData> {
         let content = std::fs::read_to_string(path)?;
-        toml::from_str(&content).map_err(|e| Error::new(io::ErrorKind::Other, e))
+        toml::from_str(&content).map_err(Error::other)
     }
 
     pub fn delete(path: &Path, preset_dir: PathBuf) -> io::Result<()> {

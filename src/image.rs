@@ -229,7 +229,7 @@ impl ImageHandler {
             image_path: None,
             loading: false,
             grade: ColorGrade::default(),
-            pipeline: ColorEffects::default(),
+            pipeline: ColorEffects::default_pipeline(),
             target_size: Size::new(17, 8),
             is_proxy_enabled: true,
             scope_data: ScopeData::new(),
@@ -311,7 +311,7 @@ impl ImageHandler {
             }
 
             let mut last_grade = ColorGrade::default();
-            let mut last_pipeline = ColorEffects::default();
+            let mut last_pipeline = ColorEffects::default_pipeline();
 
             let mut is_dragging = false;
             let timeout = if is_proxy_enabled {
@@ -398,7 +398,7 @@ impl ImageHandler {
         let mut pixel_step = total_pixels / target_samples;
 
         // Fix getting pixels from same col if width is divisible by pixel_step
-        if pixel_step % 2 == 0 {
+        if pixel_step.is_multiple_of(2) {
             pixel_step += 1;
         }
 
@@ -437,7 +437,7 @@ impl ImageHandler {
         export_path.push(file_name);
         export_path.set_extension(format!("output.{}", ext));
 
-        let grade = self.grade.clone();
+        let grade = self.grade;
         let export_path_str = export_path.to_str().unwrap_or_default().to_string();
 
         let (tx, rx) = mpsc::channel();
@@ -485,7 +485,7 @@ impl ImageHandler {
     }
 
     pub fn apply_effects(&mut self, grade: ColorGrade, pipeline: Vec<ColorEffects>) {
-        self.grade = grade.clone();
+        self.grade = grade;
         self.pipeline = pipeline.clone();
 
         if let Some(ref tx) = self.grade_tx {
