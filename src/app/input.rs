@@ -35,15 +35,15 @@ impl App {
             // I solved same keyevents handling multiple times with disable_next_events
             // I don't know it is the best way to solve it but it is working for now
             let disable_next_events = match event {
-                Event::Key(key_event) if key_event.kind == KeyEventKind::Press || key_event.kind == KeyEventKind::Repeat => {
+                Event::Key(key_event)
+                    if key_event.kind == KeyEventKind::Press
+                        || key_event.kind == KeyEventKind::Repeat =>
+                {
                     self.handle_key_event(key_event)
                 }
-                Event::Key(key_event)
-                // I have not any other events to have release action so I am checking the space bar over here
-                // I can write the space bar release action in here,
-                // but inside of handle_key_event function it look better
-                if key_event.kind == KeyEventKind::Release && key_event.code == KeyCode::Char(' ') => {
-                    self.handle_key_event(key_event)
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
+                    self.handle_key_release(key_event);
+                    false
                 }
                 _ => false,
             };
@@ -77,7 +77,7 @@ impl App {
             KeyCode::Enter => {
                 if !self.preset_input.is_empty() {
                     let data =
-                        PresetManager::from_app_state(&self.sliders, &self.wheels, &self.effects);
+                        PresetManager::from_app_state(&self.sliders, &self.wheels, &self.pipeline);
                     match PresetManager::save(&self.preset_input, &data, self.preset_dir.clone()) {
                         Ok(_) => {
                             self.preset_status = Some((
@@ -105,7 +105,18 @@ impl App {
             _ => {}
         }
     }
+    fn handle_key_release(&mut self, key_event: KeyEvent) {
+        match map_key_to_action(key_event) {
+            Action::ToggleOriginal => {
+                self.is_show_original = false;
+                self.is_original = false;
+                self.is_re_render = true;
+            }
+            _ => {}
+        }
+    }
     fn handle_key_event(&mut self, key_event: KeyEvent) -> bool {
+        let is_holding = key_event.kind == KeyEventKind::Repeat;
         match map_key_to_action(key_event) {
             Action::ExportImage => {
                 self.file_explorer
@@ -177,7 +188,7 @@ impl App {
                                 &data,
                                 &mut self.sliders,
                                 &mut self.wheels,
-                                &mut self.effects,
+                                &mut self.pipeline,
                             );
                             self.is_re_render = true;
                             self.selected_effect_index = 0;
@@ -236,19 +247,23 @@ impl App {
                 ActivePage::Scopes => {}
                 ActivePage::Pipeline => {
                     self.selected_effect_index =
-                        (self.selected_effect_index + 1) % self.effects.len();
+                        (self.selected_effect_index + 1) % self.pipeline.len();
                 }
                 ActivePage::Preset => {}
             },
             Action::AdjustValue { delta_x, delta_y } => {
+                if !is_holding {
+                    self.history.push(self.get_snapshot());
+                }
                 match self.page {
                     ActivePage::Sliders => {
                         let s = &mut self.sliders[self.selected_slider_index];
                         let direction = delta_y + delta_x; // one is always 0
+                        let step = if is_holding { s.step * 3.0 } else { s.step };
                         if direction > 0.0 {
-                            s.state.increase(s.step);
+                            s.state.increase(step);
                         } else {
-                            s.state.decrease(s.step);
+                            s.state.decrease(step);
                         }
                     }
                     ActivePage::Wheels => {
@@ -266,16 +281,17 @@ impl App {
                         } else {
                             let s = &mut w.lum;
                             let direction = delta_y + delta_x;
+                            let step = if is_holding { s.step * 3.0 } else { s.step };
                             if direction > 0.0 {
-                                s.state.increase(s.step);
+                                s.state.increase(step);
                             } else {
-                                s.state.decrease(s.step);
+                                s.state.decrease(step);
                             }
                         }
                     }
                     ActivePage::Scopes => {}
                     ActivePage::Pipeline => {
-                        let p = &mut self.effects;
+                        let p = &mut self.pipeline;
                         let len = p.len();
                         let i = self.selected_effect_index;
                         let direction = if self.layout == AppLayout::Horizontal {
@@ -336,7 +352,7 @@ impl App {
                 }
                 ActivePage::Scopes => {}
                 ActivePage::Pipeline => {
-                    self.effects = ColorEffects::default_pipeline();
+                    self.pipeline = ColorEffects::default_pipeline();
                     self.selected_effect_index = 0;
                     self.is_re_render = true;
                 }
@@ -352,20 +368,13 @@ impl App {
                     w.lum.state.set_value(w.lum.default_value);
                 });
                 self.is_re_render = true;
-                self.effects = ColorEffects::default_pipeline();
+                self.pipeline = ColorEffects::default_pipeline();
                 self.selected_effect_index = 0;
             }
             Action::ToggleHelp => self.is_help_view = !self.is_help_view,
             Action::ToggleOriginal => {
-                if key_event.kind == KeyEventKind::Press {
-                    self.is_show_original = true;
-                    self.is_re_render = true;
-                }
-                if key_event.kind == KeyEventKind::Release {
-                    self.is_show_original = false;
-                    self.is_original = false;
-                    self.is_re_render = true;
-                }
+                self.is_show_original = true;
+                self.is_re_render = true;
             }
             Action::ToggleProxy => {
                 self.is_proxy_enabled = !self.is_proxy_enabled;
@@ -376,6 +385,18 @@ impl App {
             Action::Escape => {
                 self.is_help_view = false;
                 self.is_file_explorer_visible = false;
+            }
+            Action::Redo => {
+                if let Some(snapshot) = self.history.redo(self.get_snapshot()) {
+                    self.apply_snapshot(snapshot);
+                }
+                self.is_re_render = true;
+            }
+            Action::Undo => {
+                if let Some(snapshot) = self.history.undo(self.get_snapshot()) {
+                    self.apply_snapshot(snapshot);
+                }
+                self.is_re_render = true;
             }
             _ => return false,
         }

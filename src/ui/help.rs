@@ -12,7 +12,7 @@ pub struct HelpSection {}
 
 impl HelpSection {
     pub const WIDTH: u16 = 76;
-    pub const HEIGHT: u16 = 21;
+    pub const HEIGHT: u16 = 20;
     fn section_header(title: &'static str) -> Line<'static> {
         Line::from(vec![
             Span::styled(" ", Style::default()),
@@ -70,19 +70,18 @@ impl Widget for HelpSection {
             Self::key_entry("1 - 5", "Switch View (1-5) "),
             Self::key_entry("Tab", "Change Selected Part"),
             Self::key_entry("?", "Show Help Screen"),
-            Line::default(),
-            Self::section_header("Adjustments"),
-            Self::key_entry("↑ / k", "Increase / Move Up"),
-            Self::key_entry("↓ / j", "Decrease / Move Down"),
-            Self::key_entry("→ / l", "Increase / Move Right"),
-            Self::key_entry("← / h", "Decrease / Move Left"),
-            Self::key_entry("r", "Reset Selected Tool"),
-            Self::key_entry("R", "Reset All"),
-            Line::default(),
-            Self::section_header("General"),
             Self::key_entry("o", "Switch Layout"),
             Self::key_entry("q / ^c", "Quit Application"),
-            Self::key_entry("Esc", "Close"),
+            Line::default(),
+            Self::section_header("Adjustments"),
+            Self::key_entry("← / h", "Decrease / Move Left"),
+            Self::key_entry("↓ / j", "Decrease / Move Down"),
+            Self::key_entry("↑ / k", "Increase / Move Up"),
+            Self::key_entry("→ / l", "Increase / Move Right"),
+            Self::key_entry("r", "Reset Selected Tool"),
+            Self::key_entry("R", "Reset All"),
+            Self::key_entry("^z / u", "Undo"),
+            Self::key_entry("^r", "Redo"),
         ];
 
         let right_col = vec![
@@ -95,7 +94,7 @@ impl Widget for HelpSection {
             Self::section_header("File"),
             Self::key_entry("f", "Toggle File Explorer"),
             Self::key_entry("Enter", "Select / Open Image"),
-            Self::key_entry("Ctrl+s", "Export Image (Picker)"),
+            Self::key_entry("^s", "Export Image (Picker)"),
             Self::key_entry("s", "Confirm Export"),
             Self::key_entry("Del / d", "Delete Preset"),
         ];

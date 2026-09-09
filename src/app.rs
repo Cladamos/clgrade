@@ -1,3 +1,4 @@
+mod history;
 mod input;
 
 use ratatui::{
@@ -11,6 +12,7 @@ use std::time::Instant;
 use std::{io, path::PathBuf};
 
 use crate::{
+    app::history::{History, Snapshot},
     image::{ColorGrade, ImageHandler},
     preset::PresetManager,
     ui::{
@@ -61,8 +63,9 @@ pub struct App {
     image_handler: ImageHandler,
     sliders: Vec<SliderData>,
     wheels: Vec<WheelData>,
-    effects: Vec<ColorEffects>,
+    pipeline: Vec<ColorEffects>,
     file_explorer: FileExplorer,
+    history: History,
 
     preset_explorer: FileExplorer,
     preset_dir: PathBuf,
@@ -106,8 +109,9 @@ impl App {
             image_handler: ImageHandler::new(),
             sliders,
             wheels,
-            effects: ColorEffects::default_pipeline(),
+            pipeline: ColorEffects::default_pipeline(),
             file_explorer,
+            history: History::new(),
 
             preset_explorer,
             preset_dir,
@@ -198,35 +202,64 @@ impl App {
                     self.is_original = true;
                 }
                 if !self.is_show_original {
-                    self.image_handler.apply_effects(
-                        ColorGrade {
-                            //sliders
-                            temperature: self.sliders[0].state.value() as f32,
-                            tint: self.sliders[1].state.value() as f32,
-                            exposure: self.sliders[2].state.value() as f32,
-                            contrast: self.sliders[3].state.value() as f32,
-                            saturation: self.sliders[4].state.value() as f32,
-                            hue_degrees: self.sliders[5].state.value() as f32,
-
-                            //wheels
-                            lift_x: self.wheels[0].x as f32,
-                            lift_y: self.wheels[0].y as f32,
-                            lift_lum: self.wheels[0].lum.state.value() as f32,
-                            gamma_x: self.wheels[1].x as f32,
-                            gamma_y: self.wheels[1].y as f32,
-                            gamma_lum: self.wheels[1].lum.state.value() as f32,
-                            gain_x: self.wheels[2].x as f32,
-                            gain_y: self.wheels[2].y as f32,
-                            gain_lum: self.wheels[2].lum.state.value() as f32,
-                        },
-                        self.effects.clone(),
-                    );
+                    self.image_handler
+                        .apply_effects(self.get_grade(), self.pipeline.clone());
                 }
                 self.is_re_render = false;
             }
             self.image_handler.poll();
         }
         Ok(())
+    }
+    fn get_grade(&self) -> ColorGrade {
+        ColorGrade {
+            //sliders
+            temperature: self.sliders[0].state.value() as f32,
+            tint: self.sliders[1].state.value() as f32,
+            exposure: self.sliders[2].state.value() as f32,
+            contrast: self.sliders[3].state.value() as f32,
+            saturation: self.sliders[4].state.value() as f32,
+            hue_degrees: self.sliders[5].state.value() as f32,
+
+            //wheels
+            lift_x: self.wheels[0].x as f32,
+            lift_y: self.wheels[0].y as f32,
+            lift_lum: self.wheels[0].lum.state.value() as f32,
+            gamma_x: self.wheels[1].x as f32,
+            gamma_y: self.wheels[1].y as f32,
+            gamma_lum: self.wheels[1].lum.state.value() as f32,
+            gain_x: self.wheels[2].x as f32,
+            gain_y: self.wheels[2].y as f32,
+            gain_lum: self.wheels[2].lum.state.value() as f32,
+        }
+    }
+
+    fn get_snapshot(&self) -> Snapshot {
+        Snapshot {
+            grade: self.get_grade(),
+            pipeline: self.pipeline.clone(),
+        }
+    }
+
+    fn apply_snapshot(&mut self, snapshot: Snapshot) {
+        self.pipeline = snapshot.pipeline;
+
+        let grade = snapshot.grade;
+        self.sliders[0].state.set_value(grade.temperature as f64);
+        self.sliders[1].state.set_value(grade.tint as f64);
+        self.sliders[2].state.set_value(grade.exposure as f64);
+        self.sliders[3].state.set_value(grade.contrast as f64);
+        self.sliders[4].state.set_value(grade.saturation as f64);
+        self.sliders[5].state.set_value(grade.hue_degrees as f64);
+        self.wheels[0].x = grade.lift_x as f64;
+        self.wheels[0].y = grade.lift_y as f64;
+        self.wheels[0].lum.state.set_value(grade.lift_lum as f64);
+        self.wheels[1].x = grade.gamma_x as f64;
+        self.wheels[1].y = grade.gamma_y as f64;
+        self.wheels[1].lum.state.set_value(grade.gamma_lum as f64);
+        self.wheels[2].x = grade.gain_x as f64;
+        self.wheels[2].y = grade.gain_y as f64;
+        self.wheels[2].lum.state.set_value(grade.gain_lum as f64);
     }
 
     fn draw(&self, frame: &mut Frame) {
@@ -252,7 +285,7 @@ impl App {
                     SliderSection::row_width(&self.sliders),
                     WheelSection::row_width(&self.wheels, self.layout),
                     ScopeSection::MIN_WIDTH,
-                    PipelineSection::row_width(&self.effects),
+                    PipelineSection::row_width(&self.pipeline),
                 ];
                 // image borders(2) + info line(1) + gap(1) + controls + page indicator(1)
                 needed_height = image_size
@@ -368,13 +401,13 @@ impl App {
                         let pipeline_area = centered_rect(
                             CenterOpts {
                                 width: PipelineSection::PIPELINE_WIDTH,
-                                height: PipelineSection::col_height(&self.effects),
+                                height: PipelineSection::col_height(&self.pipeline),
                                 margin: 0,
                             },
                             app_layout[1],
                         );
                         let pipeline_section = PipelineSection::new(
-                            &self.effects,
+                            &self.pipeline,
                             self.selected_effect_index,
                             self.layout,
                         );
@@ -457,14 +490,14 @@ impl App {
                 }
                 ActivePage::Pipeline => {
                     let pipeline_section = PipelineSection::new(
-                        &self.effects,
+                        &self.pipeline,
                         self.selected_effect_index,
                         self.layout,
                     );
                     // there is n boxes and n+1 pipes
                     let pipeline_area = centered_rect(
                         CenterOpts {
-                            width: PipelineSection::row_width(&self.effects),
+                            width: PipelineSection::row_width(&self.pipeline),
                             height: PipelineSection::PIPELINE_HEIGHT,
                             margin: 0,
                         },

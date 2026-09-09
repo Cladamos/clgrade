@@ -24,6 +24,8 @@ pub enum Action {
     ToggleLayout,
     ToggleHelp,
     Escape,
+    Undo,
+    Redo,
     None,
 }
 
@@ -55,13 +57,15 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
             delta_x: -1.0,
             delta_y: 0.0,
         },
-        (_, KeyCode::Char('r')) => Action::ResetTool,
+        (KeyModifiers::NONE, KeyCode::Char('r')) => Action::ResetTool,
         (_, KeyCode::Char('R')) => Action::ResetAll,
 
         // General
         (_, KeyCode::Char('o')) => Action::ToggleLayout,
         (_, KeyCode::Char('q')) | (KeyModifiers::CONTROL, KeyCode::Char('c')) => Action::Quit,
         (_, KeyCode::Esc) => Action::Escape,
+        (KeyModifiers::CONTROL, KeyCode::Char('z')) | (_, KeyCode::Char('u')) => Action::Undo,
+        (KeyModifiers::CONTROL, KeyCode::Char('r')) => Action::Redo,
 
         // Preview
         (_, KeyCode::Char(' ')) => Action::ToggleOriginal,

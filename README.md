@@ -41,6 +41,8 @@ Press `?` inside the application anytime to view the help modal.
 | | `←` / `h`, `→` / `l` | Adjust left / right (e.g. wheels, balance) |
 | | `r` | Reset selected tool |
 | | `R` | Reset all adjustments |
+| | `Ctrl+z` / `u` | Undo |
+| | `Ctrl+r` | Redo |
 | **Preview** | `Space` *(hold)* | View original image |
 | | `p` | Toggle proxy mode |
 | | `a` / `A` | Change aspect ratio / resolution |
