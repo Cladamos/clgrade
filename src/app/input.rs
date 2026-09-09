@@ -252,35 +252,14 @@ impl App {
                 ActivePage::Preset => {}
             },
             Action::AdjustValue { delta_x, delta_y } => {
-                if !is_holding {
-                    self.history.push(self.get_snapshot());
-                }
-                match self.page {
-                    ActivePage::Sliders => {
-                        let s = &mut self.sliders[self.selected_slider_index];
-                        let direction = delta_y + delta_x; // one is always 0
-                        let step = if is_holding { s.step * 3.0 } else { s.step };
-                        if direction > 0.0 {
-                            s.state.increase(step);
-                        } else {
-                            s.state.decrease(step);
-                        }
+                if !self.is_file_explorer_visible {
+                    if !is_holding {
+                        self.history.push(self.get_snapshot());
                     }
-                    ActivePage::Wheels => {
-                        let w = &mut self.wheels[self.selected_wheel_index];
-                        if w.focused_part == crate::ui::wheel::SelectedPart::Wheel {
-                            let step = 0.05;
-                            let new_x = w.x + delta_x * step;
-                            let new_y = w.y + delta_y * step;
-                            if (-1.0..=1.0).contains(&new_x) {
-                                w.x = new_x;
-                            }
-                            if (-1.0..=1.0).contains(&new_y) {
-                                w.y = new_y;
-                            }
-                        } else {
-                            let s = &mut w.lum;
-                            let direction = delta_y + delta_x;
+                    match self.page {
+                        ActivePage::Sliders => {
+                            let s = &mut self.sliders[self.selected_slider_index];
+                            let direction = delta_y + delta_x; // one is always 0
                             let step = if is_holding { s.step * 3.0 } else { s.step };
                             if direction > 0.0 {
                                 s.state.increase(step);
@@ -288,31 +267,54 @@ impl App {
                                 s.state.decrease(step);
                             }
                         }
-                    }
-                    ActivePage::Scopes => {}
-                    ActivePage::Pipeline => {
-                        let p = &mut self.pipeline;
-                        let len = p.len();
-                        let i = self.selected_effect_index;
-                        let direction = if self.layout == AppLayout::Horizontal {
-                            // In horizontal view, y-axis is inverted for up/down
-                            -delta_y + delta_x
-                        } else {
-                            delta_x + delta_y
-                        };
-                        if direction > 0.0 {
-                            let next_i = (i + 1) % len;
-                            p.swap(i, next_i);
-                            self.selected_effect_index = next_i;
-                        } else {
-                            let next_i = (i + len - 1) % len;
-                            p.swap(i, next_i);
-                            self.selected_effect_index = next_i;
+                        ActivePage::Wheels => {
+                            let w = &mut self.wheels[self.selected_wheel_index];
+                            if w.focused_part == crate::ui::wheel::SelectedPart::Wheel {
+                                let step = 0.05;
+                                let new_x = w.x + delta_x * step;
+                                let new_y = w.y + delta_y * step;
+                                if (-1.0..=1.0).contains(&new_x) {
+                                    w.x = new_x;
+                                }
+                                if (-1.0..=1.0).contains(&new_y) {
+                                    w.y = new_y;
+                                }
+                            } else {
+                                let s = &mut w.lum;
+                                let direction = delta_y + delta_x;
+                                let step = if is_holding { s.step * 3.0 } else { s.step };
+                                if direction > 0.0 {
+                                    s.state.increase(step);
+                                } else {
+                                    s.state.decrease(step);
+                                }
+                            }
                         }
+                        ActivePage::Scopes => {}
+                        ActivePage::Pipeline => {
+                            let p = &mut self.pipeline;
+                            let len = p.len();
+                            let i = self.selected_effect_index;
+                            let direction = if self.layout == AppLayout::Horizontal {
+                                // In horizontal view, y-axis is inverted for up/down
+                                -delta_y + delta_x
+                            } else {
+                                delta_x + delta_y
+                            };
+                            if direction > 0.0 {
+                                let next_i = (i + 1) % len;
+                                p.swap(i, next_i);
+                                self.selected_effect_index = next_i;
+                            } else {
+                                let next_i = (i + len - 1) % len;
+                                p.swap(i, next_i);
+                                self.selected_effect_index = next_i;
+                            }
+                        }
+                        ActivePage::Preset => {}
                     }
-                    ActivePage::Preset => {}
+                    self.is_re_render = true;
                 }
-                self.is_re_render = true;
             }
             Action::ChangeAspectRatio => {
                 self.selected_aspect_ratio_index =

@@ -1,6 +1,6 @@
 [package]
 name = "clgrade"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A terminal based image color grading application"
 readme = "README.md"
