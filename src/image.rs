@@ -226,7 +226,15 @@ pub struct ImageHandler {
 
 impl ImageHandler {
     pub fn new() -> Self {
-        let picker = Picker::from_query_stdio().expect("Terminal must support graphics");
+        let picker = match Picker::from_query_stdio() {
+            Ok(p) => p,
+            Err(e) => {
+                ratatui::restore();
+                eprintln!("Error: Terminal graphics protocol query failed: {e}");
+                eprintln!("\nPlease ensure you are using a terminal emulator with graphics support (e.g. Ghostty, Kitty, WezTerm, iTerm2, or Konsole).");
+                std::process::exit(1);
+            }
+        };
         ImageHandler {
             protocol: None,
             image_path: None,
@@ -417,7 +425,7 @@ impl ImageHandler {
         let total_pixels = width * height;
         let target_samples = 2500;
 
-        let mut pixel_step = total_pixels / target_samples;
+        let mut pixel_step = (total_pixels / target_samples).max(1);
 
         // Fix getting pixels from same col if width is divisible by pixel_step
         if pixel_step.is_multiple_of(2) {

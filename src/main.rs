@@ -17,20 +17,32 @@ use ratatui::crossterm;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        ratatui::restore();
+        original_hook(panic_info);
+    }));
+
     let mut terminal = ratatui::init();
 
-    crossterm::terminal::enable_raw_mode()?;
-    execute!(
-        stdout(),
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
-    )?;
+    let supports_keyboard_enhancement =
+        crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+    if supports_keyboard_enhancement {
+        let _ = execute!(
+            stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
+        );
+    }
 
     let initial_image = parse_cli_args();
     let mut app = App::new(initial_image);
     let app_result = app.run(&mut terminal);
-    execute!(stdout(), PopKeyboardEnhancementFlags,)?;
+
+    if supports_keyboard_enhancement {
+        let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+    }
     ratatui::restore();
-    crossterm::terminal::disable_raw_mode()?;
 
     app_result.map_err(|e| color_eyre::eyre::eyre!("Application failed: {}", e))
 }
