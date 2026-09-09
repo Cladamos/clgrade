@@ -24,7 +24,8 @@ impl App {
                 match event {
                     Event::Key(key_event)
                         if key_event.kind == KeyEventKind::Press
-                            || key_event.kind == KeyEventKind::Repeat =>
+                            || (key_event.kind == KeyEventKind::Repeat
+                                && key_event.code == KeyCode::Backspace) =>
                     {
                         self.handle_preset_input_mode_event(key_event);
                         return Ok(());
@@ -32,18 +33,28 @@ impl App {
                     _ => {}
                 }
             }
-            // I solved same keyevents handling multiple times with disable_next_events
-            // I don't know it is the best way to solve it but it is working for now
+
             let disable_next_events = match event {
-                Event::Key(key_event)
-                    if key_event.kind == KeyEventKind::Press
-                        || key_event.kind == KeyEventKind::Repeat =>
-                {
-                    self.handle_key_event(key_event)
-                }
-                Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
-                    self.handle_key_release(key_event);
-                    false
+                Event::Key(key_event) => {
+                    let is_repeat = key_event.kind == KeyEventKind::Repeat;
+                    let is_press = key_event.kind == KeyEventKind::Press;
+                    let is_release = key_event.kind == KeyEventKind::Release;
+
+                    if is_press || is_repeat {
+                        let action = map_key_to_action(key_event);
+                        // Prevent triggerig multiple events on older kitty versions
+                        // I encountered this issue on kitty 0.32.2
+                        if is_repeat && !matches!(action, Action::AdjustValue { .. }) {
+                            false
+                        } else {
+                            self.handle_key_event(key_event)
+                        }
+                    } else if is_release {
+                        self.handle_key_release(key_event);
+                        false
+                    } else {
+                        false
+                    }
                 }
                 _ => false,
             };
@@ -106,13 +117,10 @@ impl App {
         }
     }
     fn handle_key_release(&mut self, key_event: KeyEvent) {
-        match map_key_to_action(key_event) {
-            Action::ToggleOriginal => {
-                self.is_show_original = false;
-                self.is_original = false;
-                self.is_re_render = true;
-            }
-            _ => {}
+        if let Action::ToggleOriginal = map_key_to_action(key_event) {
+            self.is_show_original = false;
+            self.is_original = false;
+            self.is_re_render = true;
         }
     }
     fn handle_key_event(&mut self, key_event: KeyEvent) -> bool {
