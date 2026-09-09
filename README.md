@@ -5,6 +5,33 @@ A terminal based image color grading application written in Rust using [Ratatui]
 ![clgrade demo](assets/demo.gif)
 
 ## Installation
+
+### 1. System Dependencies
+
+`clgrade` requires `chafa` (for terminal image rendering) and `pkg-config`:
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update && sudo apt install -y pkg-config libchafa-dev libglib2.0-dev
+```
+
+**Fedora / RHEL:**
+```bash
+sudo dnf install -y pkgconf-pkg-config chafa-devel glib2-devel
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S --needed pkgconf chafa glib2
+```
+
+**macOS (Homebrew):**
+```bash
+brew install pkg-config chafa glib
+```
+
+### 2. Install `clgrade`
+
 Make sure you have [Rust and Cargo](https://www.rust-lang.org/tools/install) installed:
 
 ```bash
