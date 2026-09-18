@@ -1,4 +1,5 @@
 mod app;
+mod effect;
 mod image;
 mod input;
 mod preset;

@@ -1,8 +1,11 @@
-use crate::image::ColorGrade;
-use crate::ui::pipeline::ColorEffects;
+use crate::{
+    effect::{SliderDatas, WheelDatas},
+    ui::pipeline::ColorEffects,
+};
 
 pub struct Snapshot {
-    pub grade: ColorGrade,
+    pub slider_datas: SliderDatas,
+    pub wheel_datas: WheelDatas,
     pub pipeline: Vec<ColorEffects>,
 }
 

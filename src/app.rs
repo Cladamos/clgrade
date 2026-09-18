@@ -13,7 +13,8 @@ use std::{io, path::PathBuf};
 
 use crate::{
     app::history::{History, Snapshot},
-    image::{ColorGrade, ImageHandler},
+    effect::{SliderDatas, WheelDatas},
+    image::ImageHandler,
     preset::PresetManager,
     ui::{
         CenterOpts, ExplorerType, centered_rect,
@@ -208,7 +209,8 @@ impl App {
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
                     self.image_handler.apply_effects(
-                        ColorGrade::default(),
+                        SliderDatas::default(),
+                        WheelDatas::default(),
                         ColorEffects::default_pipeline(),
                         ColorMixerPart::default_parts(),
                     );
@@ -216,7 +218,8 @@ impl App {
                 }
                 if !self.is_show_original {
                     self.image_handler.apply_effects(
-                        self.get_grade(),
+                        self.get_slider_datas(),
+                        self.get_wheel_datas(),
                         self.pipeline.clone(),
                         self.color_mixer.clone(),
                     );
@@ -227,17 +230,18 @@ impl App {
         }
         Ok(())
     }
-    fn get_grade(&self) -> ColorGrade {
-        ColorGrade {
-            //sliders
+    fn get_slider_datas(&self) -> SliderDatas {
+        SliderDatas {
             temperature: self.sliders[0].state.value() as f32,
             tint: self.sliders[1].state.value() as f32,
             exposure: self.sliders[2].state.value() as f32,
             contrast: self.sliders[3].state.value() as f32,
             saturation: self.sliders[4].state.value() as f32,
             hue_degrees: self.sliders[5].state.value() as f32,
-
-            //wheels
+        }
+    }
+    fn get_wheel_datas(&self) -> WheelDatas {
+        WheelDatas {
             lift_x: self.wheels[0].x as f32,
             lift_y: self.wheels[0].y as f32,
             lift_lum: self.wheels[0].lum.state.value() as f32,
@@ -249,10 +253,10 @@ impl App {
             gain_lum: self.wheels[2].lum.state.value() as f32,
         }
     }
-
     fn get_snapshot(&self) -> Snapshot {
         Snapshot {
-            grade: self.get_grade(),
+            slider_datas: self.get_slider_datas(),
+            wheel_datas: self.get_wheel_datas(),
             pipeline: self.pipeline.clone(),
         }
     }
@@ -260,22 +264,18 @@ impl App {
     fn apply_snapshot(&mut self, snapshot: Snapshot) {
         self.pipeline = snapshot.pipeline;
 
-        let grade = snapshot.grade;
-        self.sliders[0].state.set_value(grade.temperature as f64);
-        self.sliders[1].state.set_value(grade.tint as f64);
-        self.sliders[2].state.set_value(grade.exposure as f64);
-        self.sliders[3].state.set_value(grade.contrast as f64);
-        self.sliders[4].state.set_value(grade.saturation as f64);
-        self.sliders[5].state.set_value(grade.hue_degrees as f64);
-        self.wheels[0].x = grade.lift_x as f64;
-        self.wheels[0].y = grade.lift_y as f64;
-        self.wheels[0].lum.state.set_value(grade.lift_lum as f64);
-        self.wheels[1].x = grade.gamma_x as f64;
-        self.wheels[1].y = grade.gamma_y as f64;
-        self.wheels[1].lum.state.set_value(grade.gamma_lum as f64);
-        self.wheels[2].x = grade.gain_x as f64;
-        self.wheels[2].y = grade.gain_y as f64;
-        self.wheels[2].lum.state.set_value(grade.gain_lum as f64);
+        let slider_values = snapshot.slider_datas.to_array();
+        self.sliders
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, s)| s.state.set_value(slider_values[i] as f64));
+
+        let wheel_values = snapshot.wheel_datas.to_array();
+        self.wheels.iter_mut().enumerate().for_each(|(i, w)| {
+            w.x = wheel_values[i][0] as f64;
+            w.y = wheel_values[i][1] as f64;
+            w.lum.state.set_value(wheel_values[i][2] as f64);
+        })
     }
 
     fn draw(&self, frame: &mut Frame) {
