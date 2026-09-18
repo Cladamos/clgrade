@@ -3,7 +3,7 @@ mod input;
 
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Offset, Rect},
     widgets::{FrameExt, Widget},
 };
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
@@ -16,7 +16,9 @@ use crate::{
     image::{ColorGrade, ImageHandler},
     preset::PresetManager,
     ui::{
-        CenterOpts, ExplorerType, centered_rect, explorer_theme,
+        CenterOpts, ExplorerType, centered_rect,
+        color_mixer::{ColorMixerPart, ColorMixerSection},
+        explorer_theme,
         help::HelpSection,
         image::ImageSection,
         page_indicator,
@@ -40,6 +42,7 @@ pub enum ActivePage {
     Scopes,
     Pipeline,
     Preset,
+    ColorMixer,
 }
 
 // I am not that happy about my horizontal layout I couldn't align things like I wanted
@@ -64,6 +67,7 @@ pub struct App {
     sliders: Vec<SliderData>,
     wheels: Vec<WheelData>,
     pipeline: Vec<ColorEffects>,
+    color_mixer: Vec<ColorMixerPart>,
     file_explorer: FileExplorer,
     history: History,
 
@@ -79,6 +83,8 @@ pub struct App {
     selected_slider_index: usize,
     selected_wheel_index: usize,
     selected_effect_index: usize,
+    selected_color_index: usize,
+    selected_color_mixer_part_index: usize,
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
 
@@ -100,6 +106,7 @@ impl App {
     pub fn new(initial_image: Option<PathBuf>) -> Self {
         let sliders = default_sliders();
         let wheels = default_wheels();
+        let color_mixer = ColorMixerPart::default_parts();
         let theme = explorer_theme(ExplorerType::File);
         let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
         let preset_dir = PresetManager::create_presets_dir();
@@ -110,6 +117,7 @@ impl App {
             sliders,
             wheels,
             pipeline: ColorEffects::default_pipeline(),
+            color_mixer,
             file_explorer,
             history: History::new(),
 
@@ -125,6 +133,8 @@ impl App {
             selected_slider_index: 0,
             selected_wheel_index: 0,
             selected_effect_index: 0,
+            selected_color_index: 0,
+            selected_color_mixer_part_index: 3,
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 0,
 
@@ -197,13 +207,19 @@ impl App {
             }
             if self.is_re_render && self.image_handler.protocol.is_some() {
                 if self.is_show_original && !self.is_original {
-                    self.image_handler
-                        .apply_effects(ColorGrade::default(), ColorEffects::default_pipeline());
+                    self.image_handler.apply_effects(
+                        ColorGrade::default(),
+                        ColorEffects::default_pipeline(),
+                        ColorMixerPart::default_parts(),
+                    );
                     self.is_original = true;
                 }
                 if !self.is_show_original {
-                    self.image_handler
-                        .apply_effects(self.get_grade(), self.pipeline.clone());
+                    self.image_handler.apply_effects(
+                        self.get_grade(),
+                        self.pipeline.clone(),
+                        self.color_mixer.clone(),
+                    );
                 }
                 self.is_re_render = false;
             }
@@ -424,8 +440,40 @@ impl App {
                         );
                         preset_section.render(input_area, frame.buffer_mut());
                     }
+                    ActivePage::ColorMixer => {
+                        let curr_sliders = &self.color_mixer[self.selected_color_index].sliders;
+                        let color_mixer_section = ColorMixerSection::new(
+                            &self.color_mixer,
+                            self.layout,
+                            self.selected_color_index,
+                            curr_sliders.len() == self.selected_color_mixer_part_index,
+                        );
+                        let centered_area = centered_rect(
+                            CenterOpts {
+                                width: SliderSection::PANEL_WIDTH,
+                                height: SliderSection::col_height(
+                                    &self.color_mixer[self.selected_color_index].sliders,
+                                ) + 4,
+                                margin: 0,
+                            },
+                            app_layout[1],
+                        );
+
+                        let slider_section = SliderSection::new(
+                            curr_sliders,
+                            self.selected_color_mixer_part_index,
+                            self.layout,
+                        );
+                        slider_section
+                            .render(centered_area.offset(Offset::new(0, 4)), frame.buffer_mut());
+                        color_mixer_section.render(
+                            centered_area.centered_horizontally(Constraint::Length(21)),
+                            frame.buffer_mut(),
+                        );
+                    }
                 }
             }
+            //TODO: I typed lots of areas over here I guess it need some refoctoring
             AppLayout::Vertical => match self.page {
                 ActivePage::Sliders => {
                     let slider_area = centered_rect(
@@ -538,6 +586,41 @@ impl App {
                     );
                     preset_section.render(input_area, frame.buffer_mut());
                 }
+                ActivePage::ColorMixer => {
+                    let curr_sliders = &self.color_mixer[self.selected_color_index].sliders;
+                    let color_mixer = ColorMixerSection::new(
+                        &self.color_mixer,
+                        self.layout,
+                        self.selected_color_index,
+                        curr_sliders.len() == self.selected_color_mixer_part_index,
+                    );
+                    let all_area = centered_rect(
+                        CenterOpts {
+                            width: SliderSection::row_width(
+                                &self.color_mixer[self.selected_color_index].sliders,
+                            ) + 10,
+                            height: SliderSection::PANEL_HEIGHT,
+                            margin: 0,
+                        },
+                        Rect {
+                            x: area.x,
+                            y: image_area.bottom().saturating_add(1),
+                            width: area.width,
+                            height: SliderSection::PANEL_HEIGHT,
+                        },
+                    );
+
+                    let slider_section = SliderSection::new(
+                        curr_sliders,
+                        self.selected_color_mixer_part_index,
+                        self.layout,
+                    );
+                    slider_section.render(all_area.offset(Offset::new(8, 0)), frame.buffer_mut());
+                    color_mixer.render(
+                        all_area.centered_vertically(Constraint::Length(10)),
+                        frame.buffer_mut(),
+                    );
+                }
             },
         }
 
@@ -548,7 +631,7 @@ impl App {
         image_section.export_status = self.active_export_status();
         image_section.render(area, frame.buffer_mut());
 
-        let page_indicator = page_indicator(self.page);
+        let page_indicator = page_indicator(self.page, area.width);
         page_indicator.render(
             Rect {
                 x: area.x,

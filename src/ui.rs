@@ -1,3 +1,4 @@
+pub mod color_mixer;
 pub mod help;
 pub mod image;
 pub mod pipeline;
@@ -75,39 +76,44 @@ pub fn explorer_theme(explorer_type: ExplorerType) -> Theme {
         .with_title_bottom(|_| bottom_title.into())
 }
 
-pub fn page_indicator<'a>(page: ActivePage) -> Line<'a> {
+pub fn page_indicator<'a>(page: ActivePage, width: u16) -> Line<'a> {
     let default_style = Style::default().fg(Color::DarkGray);
     let selected_style = Style::default()
         .fg(Color::White)
         .add_modifier(Modifier::BOLD);
-    let pages: [(&str, ActivePage); 5] = [
+    let pages: [(&str, ActivePage); 6] = [
         ("1: sliders", ActivePage::Sliders),
         ("2: wheels", ActivePage::Wheels),
         ("3: scopes", ActivePage::Scopes),
         ("4: pipeline", ActivePage::Pipeline),
         ("5: presets", ActivePage::Preset),
+        ("6: color mixer", ActivePage::ColorMixer),
     ];
+    let mut text_len: usize = 0;
+    let mut page_text = pages
+        .iter()
+        .enumerate()
+        .flat_map(|(i, (name, active_page))| {
+            let s = if *active_page == page {
+                selected_style
+            } else {
+                default_style
+            };
 
-    Line::from(
-        pages
-            .iter()
-            .enumerate()
-            .flat_map(|(i, (name, active_page))| {
-                let s = if *active_page == page {
-                    selected_style
+            text_len += name.len();
+            text_len += if i == pages.len() - 1 { 1 } else { 3 };
+            vec![
+                Span::styled(*name, s),
+                if i == pages.len() - 1 {
+                    Span::from("")
                 } else {
-                    default_style
-                };
-                vec![
-                    Span::styled(*name, s),
-                    if i == pages.len() - 1 {
-                        Span::from("")
-                    } else {
-                        Span::from(" | ")
-                    },
-                ]
-            })
-            .collect::<Vec<Span>>(),
-    )
-    .alignment(Alignment::Center)
+                    Span::from(" | ")
+                },
+            ]
+        })
+        .collect::<Vec<Span>>();
+    if text_len > width as usize {
+        page_text = vec![Span::styled("[1-6]: pages | ?: help", default_style)];
+    }
+    Line::from(page_text).alignment(Alignment::Center)
 }

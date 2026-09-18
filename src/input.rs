@@ -12,6 +12,7 @@ pub enum Action {
     SwitchToWheels,
     SwitchToScopes,
     SwitchToPipeline,
+    SwitchToCrop,
     SwitchToPreset,
     ChangeAspectRatio,
     ChangeResolution,
@@ -37,6 +38,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('3')) => Action::SwitchToScopes,
         (_, KeyCode::Char('4')) => Action::SwitchToPipeline,
         (_, KeyCode::Char('5')) => Action::SwitchToPreset,
+        (_, KeyCode::Char('6')) => Action::SwitchToCrop,
         (_, KeyCode::Tab) => Action::NextTool,
         (_, KeyCode::Char('?')) => Action::ToggleHelp,
 

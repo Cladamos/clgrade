@@ -11,7 +11,7 @@ use crate::{
     app::AppLayout,
     ui::{focused_color, focused_style},
 };
-
+#[derive(Debug, Clone)]
 pub struct SliderData {
     pub label: &'static str,
     pub state: SliderState,
@@ -55,6 +55,29 @@ pub fn default_sliders() -> Vec<SliderData> {
             label: "Hue",
             state: SliderState::new(0.0, -180.0, 180.0),
             step: 2.0,
+            default_value: 0.0,
+        },
+    ]
+}
+
+pub fn color_mixer_sliders() -> [SliderData; 3] {
+    [
+        SliderData {
+            label: "Hue",
+            state: SliderState::new(0.0, -180.0, 180.0),
+            step: 2.0,
+            default_value: 0.0,
+        },
+        SliderData {
+            label: "Sat",
+            state: SliderState::new(1.0, 0.0, 2.0),
+            step: 0.05,
+            default_value: 1.0,
+        },
+        SliderData {
+            label: "Lum",
+            state: SliderState::new(0.0, -100.0, 100.0),
+            step: 1.0,
             default_value: 0.0,
         },
     ]

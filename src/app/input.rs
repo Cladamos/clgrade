@@ -10,7 +10,7 @@ use crate::{
         map_key_to_action,
     },
     preset::PresetManager,
-    ui::pipeline::ColorEffects,
+    ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects},
 };
 
 use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION};
@@ -231,6 +231,9 @@ impl App {
             Action::SwitchToPreset => {
                 self.page = ActivePage::Preset;
             }
+            Action::SwitchToCrop => {
+                self.page = ActivePage::ColorMixer;
+            }
             Action::ToggleLayout => {
                 self.layout = match self.layout {
                     AppLayout::Horizontal => AppLayout::Vertical,
@@ -258,6 +261,12 @@ impl App {
                         (self.selected_effect_index + 1) % self.pipeline.len();
                 }
                 ActivePage::Preset => {}
+                ActivePage::ColorMixer => {
+                    // +1 for color selection section on color mixer I am using it as last index
+                    let parts_len = self.color_mixer[self.selected_color_index].sliders.len() + 1;
+                    self.selected_color_mixer_part_index =
+                        (self.selected_color_mixer_part_index + 1) % parts_len;
+                }
             },
             Action::AdjustValue { delta_x, delta_y } => {
                 if !self.is_file_explorer_visible {
@@ -320,6 +329,35 @@ impl App {
                             }
                         }
                         ActivePage::Preset => {}
+                        ActivePage::ColorMixer => {
+                            let c = &mut self.color_mixer[self.selected_color_index];
+                            let direction = delta_y + delta_x; // one is always 0
+                            if self.selected_color_mixer_part_index < c.sliders.len() {
+                                let s = &mut c.sliders[self.selected_color_mixer_part_index];
+                                let step = if is_holding { s.step * 3.0 } else { s.step };
+                                if direction > 0.0 {
+                                    s.state.increase(step);
+                                } else {
+                                    s.state.decrease(step);
+                                }
+                            } else {
+                                let i = self.selected_color_index;
+                                let direction = if self.layout == AppLayout::Vertical {
+                                    // In horizontal view, y-axis is inverted for up/down
+                                    -delta_y + delta_x
+                                } else {
+                                    delta_x + delta_y
+                                };
+                                if direction > 0.0 {
+                                    let next_i = (i + 1) % self.color_mixer.len();
+                                    self.selected_color_index = next_i;
+                                } else {
+                                    let next_i =
+                                        (i + self.color_mixer.len() - 1) % self.color_mixer.len();
+                                    self.selected_color_index = next_i;
+                                }
+                            }
+                        }
                     }
                     self.is_re_render = true;
                 }
@@ -367,6 +405,14 @@ impl App {
                     self.is_re_render = true;
                 }
                 ActivePage::Preset => {}
+                ActivePage::ColorMixer => {
+                    let c = &mut self.color_mixer[self.selected_color_index];
+                    if self.selected_color_mixer_part_index < c.sliders.len() {
+                        let s = &mut c.sliders[self.selected_color_mixer_part_index];
+                        s.state.set_value(s.default_value);
+                        self.is_re_render = true;
+                    }
+                }
             },
             Action::ResetAll => {
                 self.sliders
@@ -380,6 +426,7 @@ impl App {
                 self.is_re_render = true;
                 self.pipeline = ColorEffects::default_pipeline();
                 self.selected_effect_index = 0;
+                self.color_mixer = ColorMixerPart::default_parts()
             }
             Action::ToggleHelp => self.is_help_view = !self.is_help_view,
             Action::ToggleOriginal => {
