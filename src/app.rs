@@ -249,6 +249,7 @@ impl App {
             slider_datas: self.get_slider_datas(),
             wheel_datas: self.get_wheel_datas(),
             pipeline: self.pipeline.clone(),
+            color_mixer: self.color_mixer.clone(),
         }
     }
 
@@ -266,7 +267,9 @@ impl App {
             w.x = wheel_values[i][0] as f64;
             w.y = wheel_values[i][1] as f64;
             w.lum.state.set_value(wheel_values[i][2] as f64);
-        })
+        });
+
+        self.color_mixer = snapshot.color_mixer;
     }
 
     fn exit(&mut self) {

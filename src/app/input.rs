@@ -87,8 +87,12 @@ impl App {
             }
             KeyCode::Enter => {
                 if !self.preset_input.is_empty() {
-                    let data =
-                        PresetManager::from_app_state(&self.sliders, &self.wheels, &self.pipeline);
+                    let data = PresetManager::from_app_state(
+                        &self.sliders,
+                        &self.wheels,
+                        &self.pipeline,
+                        &self.color_mixer,
+                    );
                     match PresetManager::save(&self.preset_input, &data, self.preset_dir.clone()) {
                         Ok(_) => {
                             self.preset_status = Some((
@@ -197,6 +201,7 @@ impl App {
                                 &mut self.sliders,
                                 &mut self.wheels,
                                 &mut self.pipeline,
+                                &mut self.color_mixer,
                             );
                             self.is_re_render = true;
                             self.selected_effect_index = 0;

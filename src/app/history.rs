@@ -1,12 +1,13 @@
 use crate::{
     effect::{SliderDatas, WheelDatas},
-    ui::pipeline::ColorEffects,
+    ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects},
 };
 
 pub struct Snapshot {
     pub slider_datas: SliderDatas,
     pub wheel_datas: WheelDatas,
     pub pipeline: Vec<ColorEffects>,
+    pub color_mixer: Vec<ColorMixerPart>,
 }
 
 const MAX_ENTRIES: usize = 1024;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
+use crate::ui::color_mixer::ColorMixerPart;
 use crate::ui::pipeline::ColorEffects;
 use crate::ui::slider::SliderData;
 use crate::ui::wheel::WheelData;
@@ -11,6 +12,7 @@ pub struct PresetData {
     pub sliders: SliderPreset,
     pub wheels: WheelsPreset,
     pub pipeline: PipelinePreset,
+    pub color_mixer: ColorMixerPreset,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,6 +42,25 @@ pub struct WheelsPreset {
 #[derive(Serialize, Deserialize)]
 pub struct PipelinePreset {
     pub order: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct ColorMixerPartPreset {
+    pub hue: f64,
+    pub saturation: f64,
+    pub luminance: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ColorMixerPreset {
+    pub red: ColorMixerPartPreset,
+    pub orange: ColorMixerPartPreset,
+    pub yellow: ColorMixerPartPreset,
+    pub green: ColorMixerPartPreset,
+    pub cyan: ColorMixerPartPreset,
+    pub blue: ColorMixerPartPreset,
+    pub purple: ColorMixerPartPreset,
+    pub magenta: ColorMixerPartPreset,
 }
 
 pub struct PresetManager;
@@ -98,6 +119,7 @@ impl PresetManager {
         sliders: &[SliderData],
         wheels: &[WheelData],
         effects: &[ColorEffects],
+        color_mixer: &[ColorMixerPart],
     ) -> PresetData {
         let slider_val = |label: &str| {
             let raw = sliders
@@ -118,6 +140,18 @@ impl PresetManager {
                     lum: Self::round_f64(w.lum.state.value(), 4),
                 })
                 .unwrap()
+        };
+        let mixer_val = |color_str: &str| {
+            let color = ColorMixerPart::str_to_color(color_str);
+            color_mixer
+                .iter()
+                .find(|c| c.indicator_color == color)
+                .map(|c| ColorMixerPartPreset {
+                    hue: Self::round_f64(c.sliders[0].state.value(), 4),
+                    saturation: Self::round_f64(c.sliders[1].state.value(), 4),
+                    luminance: Self::round_f64(c.sliders[2].state.value(), 4),
+                })
+                .unwrap_or_default()
         };
 
         PresetData {
@@ -140,6 +174,16 @@ impl PresetManager {
                     .map(|e| e.get_short_name().to_string())
                     .collect(),
             },
+            color_mixer: ColorMixerPreset {
+                red: mixer_val("red"),
+                orange: mixer_val("orange"),
+                yellow: mixer_val("yellow"),
+                green: mixer_val("green"),
+                cyan: mixer_val("cyan"),
+                blue: mixer_val("blue"),
+                purple: mixer_val("purple"),
+                magenta: mixer_val("magenta"),
+            },
         }
     }
 
@@ -148,6 +192,7 @@ impl PresetManager {
         sliders: &mut [SliderData],
         wheels: &mut [WheelData],
         effects: &mut Vec<ColorEffects>,
+        color_mixer: &mut Vec<ColorMixerPart>,
     ) {
         for slider in sliders.iter_mut() {
             match slider.label {
@@ -181,16 +226,34 @@ impl PresetManager {
                 _ => {}
             }
         }
-
-        // Pipeline order
         let mut new_effects: Vec<ColorEffects> = Vec::new();
         for name in &data.pipeline.order {
             if let Some(effect) = ColorEffects::from_short_name(name) {
                 new_effects.push(effect);
             }
         }
-        if !new_effects.is_empty() {
-            *effects = new_effects;
-        }
+        *effects = new_effects;
+
+        let apply_mixer_part =
+            |color_name: &str, preset: &ColorMixerPartPreset| -> ColorMixerPart {
+                let mut part = ColorMixerPart::default_parts()
+                    .into_iter()
+                    .find(|c| c.indicator_color == ColorMixerPart::str_to_color(color_name))
+                    .unwrap();
+                part.sliders[0].state.set_value(preset.hue);
+                part.sliders[1].state.set_value(preset.saturation);
+                part.sliders[2].state.set_value(preset.luminance);
+                part
+            };
+        *color_mixer = vec![
+            apply_mixer_part("red", &data.color_mixer.red),
+            apply_mixer_part("orange", &data.color_mixer.orange),
+            apply_mixer_part("yellow", &data.color_mixer.yellow),
+            apply_mixer_part("green", &data.color_mixer.green),
+            apply_mixer_part("cyan", &data.color_mixer.cyan),
+            apply_mixer_part("blue", &data.color_mixer.blue),
+            apply_mixer_part("purple", &data.color_mixer.purple),
+            apply_mixer_part("magenta", &data.color_mixer.magenta),
+        ];
     }
 }

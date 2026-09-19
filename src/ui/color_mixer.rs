@@ -39,6 +39,20 @@ impl ColorMixerPart {
         }
         parts
     }
+    pub fn str_to_color(s: &str) -> Color {
+        match s {
+            "red" => Color::Indexed(196),
+            "orange" => Color::Indexed(208),
+            "yellow" => Color::Indexed(226),
+            "green" => Color::Indexed(46),
+            "cyan" => Color::Indexed(51),
+            "blue" => Color::Indexed(33),
+            "purple" => Color::Indexed(129),
+            "magenta" => Color::Indexed(201),
+            _ => Color::Indexed(196),
+        }
+    }
+   
 }
 pub struct ColorMixerSection<'a> {
     pub parts: &'a [ColorMixerPart],

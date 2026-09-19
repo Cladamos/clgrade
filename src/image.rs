@@ -185,7 +185,6 @@ impl ImageHandler {
             {
                 return;
             }
-            //FIXME: If you encounter something check it out here use defaukts instead of clone
             let mut last_sliders = sliders;
             let mut last_wheels = wheels;
             let mut last_pipeline = pipeline.clone();

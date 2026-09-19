@@ -15,7 +15,7 @@ pub enum ColorEffects {
     LiftGammaGain,
     Hue,
     Saturation,
-    ColorMixer
+    ColorMixer,
 }
 impl ColorEffects {
     pub fn default_pipeline() -> Vec<ColorEffects> {
@@ -26,7 +26,7 @@ impl ColorEffects {
             ColorEffects::LiftGammaGain,
             ColorEffects::Hue,
             ColorEffects::Saturation,
-            ColorEffects::ColorMixer
+            ColorEffects::ColorMixer,
         ]
     }
 
@@ -38,7 +38,7 @@ impl ColorEffects {
             ColorEffects::LiftGammaGain => "WHEELS",
             ColorEffects::Hue => "HUE",
             ColorEffects::Saturation => "SAT",
-            ColorEffects::ColorMixer => "MIX"
+            ColorEffects::ColorMixer => "MIX",
         }
     }
 
