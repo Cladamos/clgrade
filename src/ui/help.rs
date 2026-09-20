@@ -90,6 +90,8 @@ impl Widget for HelpSection {
             Self::key_entry("p", "Toggle Proxy Mode"),
             Self::key_entry("a", "Change Aspect Ratio"),
             Self::key_entry("A", "Change Resolution"),
+            Self::key_entry("L / ⇧ → ", "Rotate Clockwise"),
+            Self::key_entry("H / ⇧ ←  ", "Rotate Counter Clockwise"),
             Line::default(),
             Self::section_header("File"),
             Self::key_entry("f", "Toggle File Explorer"),

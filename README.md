@@ -11,21 +11,25 @@ A terminal based image color grading application written in Rust using [Ratatui]
 `clgrade` requires `chafa` (for terminal image rendering) and `pkg-config`:
 
 **Ubuntu / Debian:**
+
 ```bash
 sudo apt update && sudo apt install -y pkg-config libchafa-dev libglib2.0-dev
 ```
 
 **Fedora / RHEL:**
+
 ```bash
 sudo dnf install -y pkgconf-pkg-config chafa-devel glib2-devel
 ```
 
 **Arch Linux:**
+
 ```bash
 sudo pacman -S --needed pkgconf chafa glib2
 ```
 
 **macOS (Homebrew):**
+
 ```bash
 brew install pkg-config chafa glib
 ```
@@ -39,6 +43,7 @@ cargo install --git https://github.com/cladamos/clgrade.git
 ```
 
 ## Usage
+
 You can open an image directly from the command line:
 
 ```bash
@@ -53,8 +58,8 @@ clgrade
 
 > **Supported Formats**: `png`, `jpg`, `jpeg`, `webp`
 
-
 ### Key Bindings
+
 Press `?` inside the application anytime to view the help modal.
 
 | Section | Key | Action |
@@ -73,6 +78,8 @@ Press `?` inside the application anytime to view the help modal.
 | **Preview** | `Space` *(hold)* | View original image |
 | | `p` | Toggle proxy mode |
 | | `a` / `A` | Change aspect ratio / resolution |
+| | `H` / `Shift + ←` | Rotate Counter Clockwise |
+| | `L` / `Shift + →` | Rotate Clockwise |
 | **File & Presets** | `f` | Toggle file explorer |
 | | `Enter` | Select file / load preset |
 | | `Ctrl+s` | Open export directory picker |

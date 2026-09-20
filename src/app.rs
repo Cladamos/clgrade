@@ -2,6 +2,7 @@ mod draw;
 mod history;
 mod input;
 
+use image::metadata::Orientation;
 use ratatui::DefaultTerminal;
 use ratatui_explorer::{FileExplorer, FileExplorerBuilder};
 use std::sync::mpsc;
@@ -26,6 +27,12 @@ use crate::{
 // I know these can be enum too but I dont know is it worth to implement .next() instead of using them as an array
 const ASPECT_RATIOS: [(u8, u8); 5] = [(1, 1), (4, 3), (3, 4), (16, 9), (9, 16)];
 const RESOLUTION: [u32; 4] = [240, 360, 480, 720];
+const ROTATIONS: [Orientation; 4] = [
+    Orientation::NoTransforms,
+    Orientation::Rotate90,
+    Orientation::Rotate180,
+    Orientation::Rotate270,
+];
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum ActivePage {
@@ -79,6 +86,7 @@ pub struct App {
     selected_color_mixer_part_index: usize,
     selected_aspect_ratio_index: usize,
     selected_resolution_index: usize,
+    selected_rotation_index: usize,
 
     is_help_view: bool,
     is_show_original: bool,
@@ -129,6 +137,7 @@ impl App {
             selected_color_mixer_part_index: 3,
             selected_aspect_ratio_index: 0,
             selected_resolution_index: 0,
+            selected_rotation_index: 0,
 
             is_help_view: false,
             is_show_original: false,

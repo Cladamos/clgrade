@@ -16,6 +16,7 @@ pub enum Action {
     SwitchToPreset,
     ChangeAspectRatio,
     ChangeResolution,
+    Rotate { is_clockwise: bool },
     ResetAll,
     Select,
     Delete,
@@ -51,11 +52,11 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
             delta_x: 0.0,
             delta_y: -1.0,
         },
-        (_, KeyCode::Right) | (_, KeyCode::Char('l')) => Action::AdjustValue {
+        (KeyModifiers::NONE, KeyCode::Right) | (_, KeyCode::Char('l')) => Action::AdjustValue {
             delta_x: 1.0,
             delta_y: 0.0,
         },
-        (_, KeyCode::Left) | (_, KeyCode::Char('h')) => Action::AdjustValue {
+        (KeyModifiers::NONE, KeyCode::Left) | (_, KeyCode::Char('h')) => Action::AdjustValue {
             delta_x: -1.0,
             delta_y: 0.0,
         },
@@ -74,6 +75,14 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char('p')) => Action::ToggleProxy,
         (_, KeyCode::Char('a')) => Action::ChangeAspectRatio,
         (_, KeyCode::Char('A')) => Action::ChangeResolution,
+        (_, KeyCode::Char('H')) => Action::Rotate {
+            is_clockwise: false,
+        },
+        (KeyModifiers::SHIFT, KeyCode::Left) => Action::Rotate {
+            is_clockwise: false,
+        },
+        (_, KeyCode::Char('L')) => Action::Rotate { is_clockwise: true },
+        (KeyModifiers::SHIFT, KeyCode::Right) => Action::Rotate { is_clockwise: true },
 
         // File
         (_, KeyCode::Char('f')) => Action::ToggleFileExplorer,

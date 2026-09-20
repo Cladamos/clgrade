@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use image::DynamicImage;
+use image::{DynamicImage, metadata::Orientation};
 use ratatui::layout::Size;
 use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 
@@ -51,7 +51,7 @@ pub struct ImageHandler {
 
     path: PathBuf,
     resolution: (u32, u32),
-    //TODO: Made struct for that also think about naming grade to effect
+    rotation: Orientation,
     effect_tx: Option<mpsc::Sender<EffectMessage>>,
     protocol_rx: Option<mpsc::Receiver<ProtocolMessage>>,
     picker: Picker,
@@ -84,6 +84,7 @@ impl ImageHandler {
             scope_data: ScopeData::new(),
             path: PathBuf::new(),
             resolution: (360, 360),
+            rotation: Orientation::NoTransforms,
             effect_tx: None,
             protocol_rx: None,
             picker,
@@ -114,6 +115,7 @@ impl ImageHandler {
         }
     }
 
+    //TODO: I am doing almost all image operations under this function needs refactoring
     pub fn load_from_path(&mut self, path: PathBuf) {
         self.effect_tx = None;
         self.load_error = None;
@@ -135,11 +137,12 @@ impl ImageHandler {
 
         let picker = self.picker.clone();
         let resolution = self.resolution;
+        let rotation = self.rotation;
         let target_size = self.target_size;
         let is_proxy_enabled = self.is_proxy_enabled;
 
         thread::spawn(move || {
-            let dyn_img = match image::ImageReader::open(&path)
+            let mut dyn_img = match image::ImageReader::open(&path)
                 .map_err(|e| format!("Failed to open: {e}"))
                 .and_then(|r| r.decode().map_err(|e| format!("Failed to decode: {e}")))
             {
@@ -149,6 +152,9 @@ impl ImageHandler {
                     return;
                 }
             };
+            if rotation != Orientation::NoTransforms {
+                dyn_img.apply_orientation(rotation);
+            }
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
             let source_proxy = if is_proxy_enabled {
                 Some(
@@ -383,6 +389,9 @@ impl ImageHandler {
             (width / font_size.width as u32) as u16,
             (height / font_size.height as u32) as u16,
         );
+    }
+    pub fn set_rotation(&mut self, rotation: Orientation) {
+        self.rotation = rotation
     }
 
     pub fn reload(&mut self) {

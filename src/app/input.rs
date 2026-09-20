@@ -4,7 +4,6 @@ use std::time::Instant;
 
 use crate::{
     SUPPORTED_FORMATS,
-    app::Status,
     input::{
         Action::{self},
         map_key_to_action,
@@ -13,7 +12,7 @@ use crate::{
     ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects},
 };
 
-use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION};
+use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION, ROTATIONS, Status};
 
 impl App {
     pub(super) fn handle_events(&mut self) -> io::Result<()> {
@@ -386,6 +385,18 @@ impl App {
                 );
                 self.image_handler.reload();
                 self.is_re_render = true;
+            }
+            Action::Rotate { is_clockwise } => {
+                if is_clockwise {
+                    self.selected_rotation_index =
+                        (self.selected_rotation_index + 1) % ROTATIONS.len();
+                } else {
+                    self.selected_rotation_index =
+                        (self.selected_rotation_index + ROTATIONS.len() - 1) % ROTATIONS.len();
+                }
+                self.image_handler
+                    .set_rotation(ROTATIONS[self.selected_rotation_index]);
+                self.image_handler.reload();
             }
             Action::ResetTool => match self.page {
                 ActivePage::Sliders => {
