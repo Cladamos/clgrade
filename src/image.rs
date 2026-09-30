@@ -389,6 +389,7 @@ impl ImageHandler {
         let wheels = self.wheel_datas;
         let pipeline = self.pipeline.clone();
         let color_mixer = self.color_mixer.clone();
+        let rotation = self.rotation;
         let crop_area = self.crop_area;
         let file_name = path.file_name().unwrap();
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
@@ -404,6 +405,9 @@ impl ImageHandler {
                     .map_err(|e| format!("Failed to open: {e}"))?
                     .decode()
                     .map_err(|e| format!("Failed to decode: {e}"))?;
+                if rotation != Orientation::NoTransforms {
+                    dyn_img.apply_orientation(rotation);
+                }
                 if let Some(crop) = crop_region {
                     let cropped = dyn_img.crop(crop.x, crop.y, crop.width, crop.height);
                     dyn_img = cropped;
