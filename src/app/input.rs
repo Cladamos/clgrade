@@ -333,7 +333,11 @@ impl App {
             Action::AdjustValue { delta_x, delta_y } => {
                 if !self.is_file_explorer_visible {
                     if self.is_crop_mode {
-                        let step = if is_holding { 5.0 } else { 1.0 };
+                        let mut step = if is_holding { 5.0 } else { 1.0 };
+                        let image_size = self.image_handler.source_size;
+                        if image_size.0 > 1500 || image_size.1 > 1500 {
+                            step *= 3.0;
+                        }
                         if self.crop_corner == CropCorner::TopLeft {
                             self.crop_area.adjust(
                                 delta_x * step,
