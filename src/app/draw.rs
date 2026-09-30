@@ -5,18 +5,12 @@ use ratatui::{
 };
 
 use crate::ui::{
-    CenterOpts, centered_rect, page_indicator, warning_msg,
-    color_mixer::ColorMixerSection,
-    help::HelpSection,
-    image::ImageSection,
-    pipeline::PipelineSection,
-    preset::PresetSection,
-    scope::ScopeSection,
-    slider::SliderSection,
-    wheel::WheelSection,
+    CenterOpts, centered_rect, color_mixer::ColorMixerSection, help::HelpSection,
+    image::ImageSection, page_indicator, pipeline::PipelineSection, preset::PresetSection,
+    scope::ScopeSection, slider::SliderSection, warning_msg, wheel::WheelSection,
 };
 
-use super::{ActivePage, App, AppLayout, ASPECT_RATIOS, RESOLUTION, Status};
+use super::{ASPECT_RATIOS, ActivePage, App, AppLayout, RESOLUTION, Status};
 
 impl App {
     pub(super) fn draw(&self, frame: &mut Frame) {
@@ -107,8 +101,14 @@ impl App {
             margin: 0,
         };
 
-        let mut image_section =
-            ImageSection::new(&self.image_handler, image_area, image_center_opts);
+        let mut image_section = ImageSection::new(
+            &self.image_handler,
+            image_area,
+            image_center_opts,
+            self.is_crop_mode,
+            self.crop_area,
+            self.crop_corner,
+        );
         image_section.aspect_ratio = ASPECT_RATIOS[self.selected_aspect_ratio_index];
         image_section.resolution = RESOLUTION[self.selected_resolution_index];
         image_section.export_status = self.active_export_status();
@@ -142,11 +142,8 @@ impl App {
                     },
                     app_layout[1],
                 );
-                let slider_section = SliderSection::new(
-                    &self.sliders,
-                    self.selected_slider_index,
-                    self.layout,
-                );
+                let slider_section =
+                    SliderSection::new(&self.sliders, self.selected_slider_index, self.layout);
                 slider_section.render(slider_area, frame.buffer_mut());
             }
             ActivePage::Wheels => {
@@ -163,8 +160,7 @@ impl App {
                 wheel_section.render(wheel_area, frame.buffer_mut());
             }
             ActivePage::Scopes => {
-                let scope_section =
-                    ScopeSection::new(&self.image_handler.scope_data, self.layout);
+                let scope_section = ScopeSection::new(&self.image_handler.scope_data, self.layout);
                 scope_section.render(app_layout[1], frame.buffer_mut());
             }
             ActivePage::Pipeline => {
@@ -177,16 +173,12 @@ impl App {
                     },
                     app_layout[1],
                 );
-                let pipeline_section = PipelineSection::new(
-                    &self.pipeline,
-                    self.selected_effect_index,
-                    self.layout,
-                );
+                let pipeline_section =
+                    PipelineSection::new(&self.pipeline, self.selected_effect_index, self.layout);
                 pipeline_section.render(pipeline_area, frame.buffer_mut());
             }
             ActivePage::Preset => {
-                let (explorer_area, input_area) =
-                    PresetSection::layout(app_layout[1], self.layout);
+                let (explorer_area, input_area) = PresetSection::layout(app_layout[1], self.layout);
                 frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
                 let preset_section = PresetSection::new(
                     &self.preset_input,
@@ -219,8 +211,7 @@ impl App {
                     self.selected_color_mixer_part_index,
                     self.layout,
                 );
-                slider_section
-                    .render(centered_area.offset(Offset::new(0, 4)), frame.buffer_mut());
+                slider_section.render(centered_area.offset(Offset::new(0, 4)), frame.buffer_mut());
                 color_mixer_section.render(
                     centered_area.centered_horizontally(Constraint::Length(21)),
                     frame.buffer_mut(),
@@ -278,8 +269,7 @@ impl App {
                 wheel_section.render(wheel_area, frame.buffer_mut());
             }
             ActivePage::Scopes => {
-                let scope_section =
-                    ScopeSection::new(&self.image_handler.scope_data, self.layout);
+                let scope_section = ScopeSection::new(&self.image_handler.scope_data, self.layout);
                 scope_section.render(
                     centered_rect(
                         CenterOpts {
@@ -302,11 +292,8 @@ impl App {
                 );
             }
             ActivePage::Pipeline => {
-                let pipeline_section = PipelineSection::new(
-                    &self.pipeline,
-                    self.selected_effect_index,
-                    self.layout,
-                );
+                let pipeline_section =
+                    PipelineSection::new(&self.pipeline, self.selected_effect_index, self.layout);
                 // there is n boxes and n+1 pipes
                 let pipeline_area = centered_rect(
                     CenterOpts {
@@ -341,8 +328,7 @@ impl App {
                         height: PresetSection::EXPLORER_HEIGHT + PresetSection::INPUT_HEIGHT,
                     },
                 );
-                let (explorer_area, input_area) =
-                    PresetSection::layout(preset_area, self.layout);
+                let (explorer_area, input_area) = PresetSection::layout(preset_area, self.layout);
                 frame.render_widget_ref(self.preset_explorer.widget(), explorer_area);
                 let preset_section = PresetSection::new(
                     &self.preset_input,

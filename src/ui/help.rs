@@ -92,6 +92,8 @@ impl Widget for HelpSection {
             Self::key_entry("A", "Change Resolution"),
             Self::key_entry("L / ⇧ → ", "Rotate Clockwise"),
             Self::key_entry("H / ⇧ ←  ", "Rotate Counter Clockwise"),
+            Self::key_entry("c", "Toggle Crop Mode"),
+            Self::key_entry("Enter", "Confirm Crop"),
             Line::default(),
             Self::section_header("File"),
             Self::key_entry("f", "Toggle File Explorer"),

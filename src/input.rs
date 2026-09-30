@@ -25,6 +25,7 @@ pub enum Action {
     ToggleProxy,
     ToggleLayout,
     ToggleHelp,
+    ToggleCrop,
     Escape,
     Undo,
     Redo,
@@ -74,6 +75,7 @@ pub fn map_key_to_action(key: KeyEvent) -> Action {
         (_, KeyCode::Char(' ')) => Action::ToggleOriginal,
         (_, KeyCode::Char('p')) => Action::ToggleProxy,
         (_, KeyCode::Char('a')) => Action::ChangeAspectRatio,
+        (_, KeyCode::Char('c')) => Action::ToggleCrop,
         (_, KeyCode::Char('A')) => Action::ChangeResolution,
         (_, KeyCode::Char('H')) => Action::Rotate {
             is_clockwise: false,

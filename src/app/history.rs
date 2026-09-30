@@ -1,5 +1,5 @@
 use crate::{
-    effect::{SliderDatas, WheelDatas},
+    effect::{CropArea, SliderDatas, WheelDatas},
     ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects},
 };
 
@@ -8,6 +8,7 @@ pub struct Snapshot {
     pub wheel_datas: WheelDatas,
     pub pipeline: Vec<ColorEffects>,
     pub color_mixer: Vec<ColorMixerPart>,
+    pub crop_region: Option<CropArea>,
 }
 
 const MAX_ENTRIES: usize = 1024;

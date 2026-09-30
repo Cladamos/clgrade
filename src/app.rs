@@ -9,6 +9,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 use std::{io, path::PathBuf};
 
+use crate::effect::{CropArea, CropCorner};
 use crate::{
     app::history::{History, Snapshot},
     effect::{SliderDatas, WheelDatas},
@@ -69,6 +70,8 @@ pub struct App {
     color_mixer: Vec<ColorMixerPart>,
     file_explorer: FileExplorer,
     history: History,
+    crop_area: CropArea,
+    crop_corner: CropCorner,
 
     preset_explorer: FileExplorer,
     preset_dir: PathBuf,
@@ -88,6 +91,7 @@ pub struct App {
     selected_resolution_index: usize,
     selected_rotation_index: usize,
 
+    is_crop_mode: bool,
     is_help_view: bool,
     is_show_original: bool,
     is_original: bool,
@@ -111,15 +115,18 @@ impl App {
         let file_explorer = FileExplorerBuilder::build_with_theme(theme).unwrap();
         let preset_dir = PresetManager::create_presets_dir();
         let preset_explorer = Self::build_preset_explorer(preset_dir.clone());
-
+        let image_handler = ImageHandler::new();
+        let crop_area = CropArea::default(image_handler.resolution);
         let mut app = App {
-            image_handler: ImageHandler::new(),
+            image_handler,
             sliders,
             wheels,
             pipeline: ColorEffects::default_pipeline(),
             color_mixer,
             file_explorer,
             history: History::new(),
+            crop_area,
+            crop_corner: CropCorner::TopLeft,
 
             preset_explorer,
             preset_dir,
@@ -139,6 +146,7 @@ impl App {
             selected_resolution_index: 0,
             selected_rotation_index: 0,
 
+            is_crop_mode: false,
             is_help_view: false,
             is_show_original: false,
             is_original: false,
@@ -183,7 +191,11 @@ impl App {
             self.handle_events()?;
             if self.is_image_selected {
                 let path = self.file_explorer.current().path.clone();
+                self.image_handler.crop_region = None;
                 self.image_handler.load_from_path(path);
+                self.crop_area = CropArea::default(self.image_handler.source_size);
+                self.crop_corner = CropCorner::TopLeft;
+                self.is_crop_mode = false;
                 self.is_re_render = true;
                 self.is_image_selected = false;
             }
@@ -213,6 +225,7 @@ impl App {
                         WheelDatas::default(),
                         ColorEffects::default_pipeline(),
                         ColorMixerPart::default_parts(),
+                        self.crop_area,
                     );
                     self.is_original = true;
                 }
@@ -222,6 +235,7 @@ impl App {
                         self.get_wheel_datas(),
                         self.pipeline.clone(),
                         self.color_mixer.clone(),
+                        self.crop_area,
                     );
                 }
                 self.is_re_render = false;
@@ -259,6 +273,7 @@ impl App {
             wheel_datas: self.get_wheel_datas(),
             pipeline: self.pipeline.clone(),
             color_mixer: self.color_mixer.clone(),
+            crop_region: self.image_handler.crop_region,
         }
     }
 
@@ -279,6 +294,24 @@ impl App {
         });
 
         self.color_mixer = snapshot.color_mixer;
+
+        // Detect if crop region changed and reload image accordingly
+        let crop_changed = match (&self.image_handler.crop_region, &snapshot.crop_region) {
+            (None, None) => false,
+            (Some(a), Some(b)) => {
+                a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height
+            }
+            _ => true,
+        };
+
+        self.image_handler.crop_region = snapshot.crop_region;
+
+        if crop_changed {
+            self.image_handler.reload();
+            self.crop_area = CropArea::default(self.image_handler.source_size);
+            self.crop_corner = CropCorner::TopLeft;
+            self.is_crop_mode = false;
+        }
     }
 
     fn exit(&mut self) {

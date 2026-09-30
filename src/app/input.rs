@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::{
     SUPPORTED_FORMATS,
+    effect::{CropArea, CropCorner},
     input::{
         Action::{self},
         map_key_to_action,
@@ -186,6 +187,37 @@ impl App {
                 }
             }
             Action::Select => {
+                if self.is_crop_mode {
+                    if self
+                        .crop_area
+                        .is_cropped(self.image_handler.source_size)
+                        .is_some()
+                    {
+                        self.history.push(self.get_snapshot());
+                        // Create new crop area with using current crop region for allowing multiple crops
+                        let new_region = match self.image_handler.crop_region {
+                            Some(existing) => CropArea::new(
+                                existing.x + self.crop_area.x,
+                                existing.y + self.crop_area.y,
+                                self.crop_area.width,
+                                self.crop_area.height,
+                            ),
+                            None => CropArea::new(
+                                self.crop_area.x,
+                                self.crop_area.y,
+                                self.crop_area.width,
+                                self.crop_area.height,
+                            ),
+                        };
+                        self.image_handler.crop_region = Some(new_region);
+                        self.image_handler.reload();
+                        self.crop_area = CropArea::default(self.image_handler.source_size);
+                        self.crop_corner = CropCorner::TopLeft;
+                    }
+                    self.is_crop_mode = false;
+                    self.is_re_render = true;
+                    return true;
+                }
                 if self.is_file_explorer_visible && !self.file_explorer.current().is_dir {
                     self.is_image_selected = true;
                     self.is_file_explorer_visible = false;
@@ -233,6 +265,7 @@ impl App {
                 self.page = ActivePage::Pipeline;
             }
             Action::SwitchToPreset => {
+                self.is_crop_mode = false;
                 self.page = ActivePage::Preset;
             }
             Action::SwitchToCrop => {
@@ -244,36 +277,68 @@ impl App {
                     AppLayout::Vertical => AppLayout::Horizontal,
                 };
             }
-            Action::NextTool => match self.page {
-                ActivePage::Sliders => {
-                    self.selected_slider_index =
-                        (self.selected_slider_index + 1) % self.sliders.len();
+            Action::ToggleCrop => {
+                if self.is_crop_mode {
+                    // Revert preview to full image
+                    self.crop_area = CropArea::default(self.image_handler.source_size);
+                    self.is_crop_mode = false;
+                    self.is_re_render = true;
+                } else {
+                    self.is_crop_mode = true;
                 }
-                ActivePage::Wheels => {
-                    let current_wheel = &mut self.wheels[self.selected_wheel_index];
-                    if current_wheel.focused_part == crate::ui::wheel::SelectedPart::LumSlider {
-                        current_wheel.focused_part = crate::ui::wheel::SelectedPart::Wheel;
-                        self.selected_wheel_index =
-                            (self.selected_wheel_index + 1) % self.wheels.len();
-                    } else {
-                        current_wheel.focused_part = crate::ui::wheel::SelectedPart::LumSlider;
+            }
+            Action::NextTool => {
+                if self.is_crop_mode {
+                    self.crop_corner.next();
+                    return true;
+                }
+                match self.page {
+                    ActivePage::Sliders => {
+                        self.selected_slider_index =
+                            (self.selected_slider_index + 1) % self.sliders.len();
+                    }
+                    ActivePage::Wheels => {
+                        let current_wheel = &mut self.wheels[self.selected_wheel_index];
+                        if current_wheel.focused_part == crate::ui::wheel::SelectedPart::LumSlider {
+                            current_wheel.focused_part = crate::ui::wheel::SelectedPart::Wheel;
+                            self.selected_wheel_index =
+                                (self.selected_wheel_index + 1) % self.wheels.len();
+                        } else {
+                            current_wheel.focused_part = crate::ui::wheel::SelectedPart::LumSlider;
+                        }
+                    }
+                    ActivePage::Scopes => {}
+                    ActivePage::Pipeline => {
+                        self.selected_effect_index =
+                            (self.selected_effect_index + 1) % self.pipeline.len();
+                    }
+                    ActivePage::Preset => {}
+                    ActivePage::ColorMixer => {
+                        // +1 for color selection section on color mixer I am using it as last index
+                        let parts_len =
+                            self.color_mixer[self.selected_color_index].sliders.len() + 1;
+                        self.selected_color_mixer_part_index =
+                            (self.selected_color_mixer_part_index + 1) % parts_len;
                     }
                 }
-                ActivePage::Scopes => {}
-                ActivePage::Pipeline => {
-                    self.selected_effect_index =
-                        (self.selected_effect_index + 1) % self.pipeline.len();
-                }
-                ActivePage::Preset => {}
-                ActivePage::ColorMixer => {
-                    // +1 for color selection section on color mixer I am using it as last index
-                    let parts_len = self.color_mixer[self.selected_color_index].sliders.len() + 1;
-                    self.selected_color_mixer_part_index =
-                        (self.selected_color_mixer_part_index + 1) % parts_len;
-                }
-            },
+            }
             Action::AdjustValue { delta_x, delta_y } => {
                 if !self.is_file_explorer_visible {
+                    if self.is_crop_mode {
+                        let step = if is_holding { 5.0 } else { 1.0 };
+                        if self.crop_corner == CropCorner::TopLeft {
+                            self.crop_area.adjust(
+                                delta_x * step,
+                                -delta_y * step,
+                                self.crop_corner,
+                            );
+                        } else {
+                            self.crop_area
+                                .adjust(delta_x * step, delta_y * step, self.crop_corner);
+                        }
+                        self.is_re_render = true;
+                        return false;
+                    }
                     if !is_holding {
                         self.history.push(self.get_snapshot());
                     }
@@ -439,10 +504,19 @@ impl App {
                     w.y = 0.0;
                     w.lum.state.set_value(w.lum.default_value);
                 });
-                self.is_re_render = true;
                 self.pipeline = ColorEffects::default_pipeline();
                 self.selected_effect_index = 0;
-                self.color_mixer = ColorMixerPart::default_parts()
+                self.color_mixer = ColorMixerPart::default_parts();
+                self.is_crop_mode = false;
+                if self.image_handler.crop_region.is_some() {
+                    self.image_handler.crop_region = None;
+                    self.image_handler.reload();
+                    self.crop_area = CropArea::default(self.image_handler.source_size);
+                    self.crop_corner = CropCorner::TopLeft;
+                } else {
+                    self.crop_area = CropArea::default(self.image_handler.source_size);
+                }
+                self.is_re_render = true;
             }
             Action::ToggleHelp => self.is_help_view = !self.is_help_view,
             Action::ToggleOriginal => {
@@ -456,8 +530,15 @@ impl App {
                 self.is_re_render = true;
             }
             Action::Escape => {
-                self.is_help_view = false;
-                self.is_file_explorer_visible = false;
+                if self.is_crop_mode {
+                    // Revert preview to full image
+                    self.crop_area = CropArea::default(self.image_handler.source_size);
+                    self.is_crop_mode = false;
+                    self.is_re_render = true;
+                } else {
+                    self.is_help_view = false;
+                    self.is_file_explorer_visible = false;
+                }
             }
             Action::Redo => {
                 if let Some(snapshot) = self.history.redo(self.get_snapshot()) {

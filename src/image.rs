@@ -10,7 +10,7 @@ use ratatui::layout::Size;
 use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 
 use crate::{
-    effect::{SliderDatas, WheelDatas, apply_all_effects},
+    effect::{CropArea, SliderDatas, WheelDatas, apply_all_effects},
     ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects},
 };
 
@@ -35,6 +35,7 @@ type EffectMessage = (
     WheelDatas,
     Vec<ColorEffects>,
     Vec<ColorMixerPart>,
+    CropArea,
 );
 pub struct ImageHandler {
     pub protocol: Option<Protocol>,
@@ -45,12 +46,15 @@ pub struct ImageHandler {
     pub wheel_datas: WheelDatas,
     pub pipeline: Vec<ColorEffects>,
     pub color_mixer: Vec<ColorMixerPart>,
+    pub crop_area: CropArea,
+    pub crop_region: Option<CropArea>,
     pub target_size: Size,
     pub is_proxy_enabled: bool,
     pub scope_data: ScopeData,
+    pub resolution: (u32, u32),
+    pub source_size: (u32, u32),
 
     path: PathBuf,
-    resolution: (u32, u32),
     rotation: Orientation,
     effect_tx: Option<mpsc::Sender<EffectMessage>>,
     protocol_rx: Option<mpsc::Receiver<ProtocolMessage>>,
@@ -70,6 +74,7 @@ impl ImageHandler {
                 std::process::exit(1);
             }
         };
+        let initial_resolution = (360, 360);
         ImageHandler {
             protocol: None,
             image_path: None,
@@ -79,11 +84,14 @@ impl ImageHandler {
             wheel_datas: WheelDatas::default(),
             pipeline: ColorEffects::default_pipeline(),
             color_mixer: ColorMixerPart::default_parts(),
+            crop_area: CropArea::default(initial_resolution),
+            crop_region: None,
             target_size: Size::new(17, 8),
             is_proxy_enabled: false,
             scope_data: ScopeData::new(),
             path: PathBuf::new(),
-            resolution: (360, 360),
+            resolution: initial_resolution,
+            source_size: (0, 0),
             rotation: Orientation::NoTransforms,
             effect_tx: None,
             protocol_rx: None,
@@ -124,6 +132,14 @@ impl ImageHandler {
         self.loading = true;
         self.path = path.clone();
 
+        if let Ok(dims) = image::image_dimensions(&path) {
+            self.source_size = dims;
+        }
+
+        if let Some(ref crop) = self.crop_region {
+            self.source_size = (crop.width, crop.height);
+        }
+
         let (effect_tx, effect_rx) = mpsc::channel::<EffectMessage>();
         let (protocol_tx, protocol_rx) = mpsc::channel::<ProtocolMessage>();
 
@@ -137,9 +153,11 @@ impl ImageHandler {
 
         let picker = self.picker.clone();
         let resolution = self.resolution;
+        let source_size = self.source_size;
         let rotation = self.rotation;
         let target_size = self.target_size;
         let is_proxy_enabled = self.is_proxy_enabled;
+        let crop_region = self.crop_region;
 
         thread::spawn(move || {
             let mut dyn_img = match image::ImageReader::open(&path)
@@ -152,8 +170,13 @@ impl ImageHandler {
                     return;
                 }
             };
+            let crop_area = CropArea::default(source_size);
             if rotation != Orientation::NoTransforms {
                 dyn_img.apply_orientation(rotation);
+            }
+            if let Some(crop) = crop_region {
+                let cropped = dyn_img.crop(crop.x, crop.y, crop.width, crop.height);
+                dyn_img = cropped;
             }
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
             let source_proxy = if is_proxy_enabled {
@@ -168,6 +191,7 @@ impl ImageHandler {
             let mut working_proxy = source_proxy.clone();
             let mut working_high = source_high.clone();
 
+            let preview_crop = crop_area.scaled(source_size, resolution);
             apply_all_effects(
                 &source_high,
                 &mut working_high,
@@ -175,6 +199,7 @@ impl ImageHandler {
                 &wheels,
                 &pipeline,
                 &color_mixer,
+                preview_crop.is_cropped(resolution),
             );
             let initial_scope =
                 Self::calculate_scopes(&working_high, working_high.width(), working_high.height());
@@ -195,67 +220,74 @@ impl ImageHandler {
             let mut last_wheels = wheels;
             let mut last_pipeline = pipeline.clone();
             let mut last_color_mixer = color_mixer.clone();
+            let mut last_crop_area = crop_area;
 
             let mut is_dragging = false;
             let timeout = if is_proxy_enabled {
                 Duration::from_millis(200)
             } else {
-                Duration::from_millis(16)
+                // If proxy not enabled no need to wait for is_dragging state it doesn't matter
+                // The timeout should be 0
+                Duration::from_millis(0)
             };
 
             let frame_throttle = Duration::from_millis(16);
             let last_render_time = Instant::now();
             loop {
-                let (mut sliders, mut wheels, mut pipeline, mut color_mixer) = if is_dragging {
-                    match effect_rx.recv_timeout(timeout) {
-                        Ok((s, w, p, c)) => (s, w, p, c),
-                        Err(mpsc::RecvTimeoutError::Timeout) => {
-                            is_dragging = false;
-                            working_high = source_high.clone();
-                            apply_all_effects(
-                                &source_high,
-                                &mut working_high,
-                                &last_sliders,
-                                &last_wheels,
-                                &last_pipeline,
-                                &last_color_mixer,
-                            );
+                let (mut sliders, mut wheels, mut pipeline, mut color_mixer, mut crop_area) =
+                    if is_dragging {
+                        match effect_rx.recv_timeout(timeout) {
+                            Ok((s, w, p, m, c)) => (s, w, p, m, c),
+                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                is_dragging = false;
+                                working_high = source_high.clone();
+                                let preview_crop = last_crop_area.scaled(source_size, resolution);
+                                apply_all_effects(
+                                    &source_high,
+                                    &mut working_high,
+                                    &last_sliders,
+                                    &last_wheels,
+                                    &last_pipeline,
+                                    &last_color_mixer,
+                                    preview_crop.is_cropped(resolution),
+                                );
 
-                            let scope = Self::calculate_scopes(
-                                &working_high,
-                                working_high.width(),
-                                working_high.height(),
-                            );
-                            let protocol = picker
-                                .new_protocol(
-                                    DynamicImage::ImageRgba8(working_high),
-                                    target_size,
-                                    Resize::Scale(Some(Nearest)),
-                                )
-                                .unwrap();
+                                let scope = Self::calculate_scopes(
+                                    &working_high,
+                                    working_high.width(),
+                                    working_high.height(),
+                                );
+                                let protocol = picker
+                                    .new_protocol(
+                                        DynamicImage::ImageRgba8(working_high),
+                                        target_size,
+                                        Resize::Scale(Some(Nearest)),
+                                    )
+                                    .unwrap();
 
-                            if protocol_tx.send(Ok((protocol, Some(scope)))).is_err() {
-                                break;
+                                if protocol_tx.send(Ok((protocol, Some(scope)))).is_err() {
+                                    break;
+                                }
+                                continue;
                             }
-                            continue;
+                            Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         }
-                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                    }
-                } else {
-                    match effect_rx.recv() {
-                        Ok(g) => g,
-                        Err(_) => break,
-                    }
-                };
+                    } else {
+                        match effect_rx.recv() {
+                            Ok(g) => g,
+                            Err(_) => break,
+                        }
+                    };
 
                 while let Ok(newer) = effect_rx.try_recv() {
-                    (sliders, wheels, pipeline, color_mixer) = newer;
+                    (sliders, wheels, pipeline, color_mixer, crop_area) = newer;
                 }
 
                 last_sliders = sliders;
                 last_wheels = wheels;
                 last_pipeline = pipeline.clone();
                 last_color_mixer = color_mixer.clone();
+                last_crop_area = crop_area;
                 is_dragging = true;
 
                 if last_render_time.elapsed() < frame_throttle {
@@ -263,7 +295,17 @@ impl ImageHandler {
                 }
 
                 if let (Some(sp), Some(wp)) = (source_proxy.as_ref(), working_proxy.as_mut()) {
-                    apply_all_effects(sp, wp, &sliders, &wheels, &pipeline, &color_mixer);
+                    let proxy_res = (resolution.0 / 2, resolution.1 / 2);
+                    let proxy_crop = crop_area.scaled(source_size, proxy_res);
+                    apply_all_effects(
+                        sp,
+                        wp,
+                        &sliders,
+                        &wheels,
+                        &pipeline,
+                        &color_mixer,
+                        proxy_crop.is_cropped(proxy_res),
+                    );
                     let protocol = picker
                         .new_protocol(
                             DynamicImage::ImageRgba8(wp.clone()),
@@ -341,26 +383,36 @@ impl ImageHandler {
         let wheels = self.wheel_datas;
         let pipeline = self.pipeline.clone();
         let color_mixer = self.color_mixer.clone();
+        let crop_area = self.crop_area;
         let file_name = path.file_name().unwrap();
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("png");
         export_path.push(file_name);
         export_path.set_extension(format!("output.{}", ext));
 
         let export_path_str = export_path.to_str().unwrap_or_default().to_string();
+        let crop_region = self.crop_region;
+
         thread::spawn(move || {
             let result = (|| {
-                let dyn_img = image::ImageReader::open(path)
+                let mut dyn_img = image::ImageReader::open(path)
                     .map_err(|e| format!("Failed to open: {e}"))?
                     .decode()
                     .map_err(|e| format!("Failed to decode: {e}"))?;
-                let mut export_image = dyn_img.to_rgba8();
+                if let Some(crop) = crop_region {
+                    let cropped = dyn_img.crop(crop.x, crop.y, crop.width, crop.height);
+                    dyn_img = cropped;
+                }
+                let source = dyn_img.to_rgba8();
+                let mut export_image = source.clone();
+                let export_size = (source.width(), source.height());
                 apply_all_effects(
-                    &dyn_img.to_rgba8(),
+                    &source,
                     &mut export_image,
                     &sliders,
                     &wheels,
                     &pipeline,
                     &color_mixer,
+                    crop_area.is_cropped(export_size),
                 );
                 DynamicImage::ImageRgba8(export_image)
                     .save(&export_path)
@@ -406,14 +458,15 @@ impl ImageHandler {
         wheel_datas: WheelDatas,
         pipeline: Vec<ColorEffects>,
         color_mixer: Vec<ColorMixerPart>,
+        crop_area: CropArea,
     ) {
         self.slider_datas = slider_datas;
         self.wheel_datas = wheel_datas;
         self.pipeline = pipeline.clone();
         self.color_mixer = color_mixer.clone();
-
+        self.crop_area = crop_area;
         if let Some(ref tx) = self.effect_tx {
-            let _ = tx.send((slider_datas, wheel_datas, pipeline, color_mixer));
+            let _ = tx.send((slider_datas, wheel_datas, pipeline, color_mixer, crop_area));
         }
     }
 }

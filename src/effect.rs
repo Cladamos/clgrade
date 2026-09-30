@@ -2,6 +2,93 @@ use crate::ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects};
 use image::RgbaImage;
 use rayon::prelude::*;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum CropCorner {
+    TopLeft,
+    BottomRight,
+}
+
+impl CropCorner {
+    pub fn next(&mut self) {
+        *self = match self {
+            CropCorner::TopLeft => CropCorner::BottomRight,
+            CropCorner::BottomRight => CropCorner::TopLeft,
+        };
+    }
+    pub fn label(&self) -> &str {
+        match self {
+            CropCorner::TopLeft => "TL",
+            CropCorner::BottomRight => "BR",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CropArea {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    max_x: u32,
+    max_y: u32,
+}
+impl CropArea {
+    pub fn default(image_size: (u32, u32)) -> Self {
+        CropArea {
+            x: 0,
+            y: 0,
+            width: image_size.0,
+            height: image_size.1,
+            max_x: image_size.0,
+            max_y: image_size.1,
+        }
+    }
+    pub fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
+        CropArea {
+            x,
+            y,
+            width,
+            height,
+            max_x: width,
+            max_y: height,
+        }
+    }
+    pub fn adjust(&mut self, delta_x: f64, delta_y: f64, corner: CropCorner) {
+        match corner {
+            CropCorner::TopLeft => {
+                self.x = ((self.x as f64 + delta_x) as u32).clamp(0, self.max_x);
+                self.y = ((self.y as f64 + delta_y) as u32).clamp(0, self.max_y);
+                self.width = ((self.width as f64 - delta_x) as u32).clamp(10, self.max_x);
+                self.height = ((self.height as f64 - delta_y) as u32).clamp(10, self.max_y);
+            }
+            CropCorner::BottomRight => {
+                self.width = ((self.width as f64 + delta_x) as u32).clamp(10, self.max_x);
+                self.height = ((self.height as f64 - delta_y) as u32).clamp(10, self.max_y);
+            }
+        }
+    }
+
+    pub fn scaled(&self, from: (u32, u32), to: (u32, u32)) -> Self {
+        let scale_x = to.0 as f64 / from.0 as f64;
+        let scale_y = to.1 as f64 / from.1 as f64;
+        CropArea {
+            x: (self.x as f64 * scale_x) as u32,
+            y: (self.y as f64 * scale_y) as u32,
+            width: (self.width as f64 * scale_x) as u32,
+            height: (self.height as f64 * scale_y) as u32,
+            max_x: to.0,
+            max_y: to.1,
+        }
+    }
+
+    pub fn is_cropped(&self, image_size: (u32, u32)) -> Option<&Self> {
+        if self.x == 0 && self.y == 0 && self.width == image_size.0 && self.height == image_size.1 {
+            None
+        } else {
+            Some(self)
+        }
+    }
+}
 #[derive(Clone, Copy)]
 pub struct SliderDatas {
     pub temperature: f32, // -100.0 to 100.0
@@ -278,6 +365,7 @@ pub fn apply_all_effects(
     wheel_datas: &WheelDatas,
     pipeline: &[ColorEffects],
     color_mixer: &[ColorMixerPart],
+    crop_area: Option<&CropArea>,
 ) {
     let radians = slider_datas.hue_degrees.to_radians();
     let cos_a = radians.cos();
@@ -326,13 +414,26 @@ pub fn apply_all_effects(
         hsl_adjustments: color_mixer,
     };
 
+    let dimensions = working.dimensions();
     working
         .par_pixels_mut()
+        .enumerate()
         .zip(source.par_pixels())
-        .for_each(|(w_px, s_px)| {
+        .for_each(|((i, w_px), s_px)| {
             let mut r = s_px[0] as f32;
             let mut g = s_px[1] as f32;
             let mut b = s_px[2] as f32;
+            if let Some(a) = crop_area {
+                let y = i as u32 / dimensions.0;
+                let x = i as u32 % dimensions.0;
+                let x_range = a.x..(a.x + a.width);
+                let y_range = a.y..(a.y + a.height);
+                if !x_range.contains(&x) || !y_range.contains(&y) {
+                    r *= 0.3;
+                    g *= 0.3;
+                    b *= 0.3;
+                }
+            }
 
             for effect in pipeline {
                 effect.apply_effect(&mut r, &mut g, &mut b, &params);

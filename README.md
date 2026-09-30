@@ -80,6 +80,9 @@ Press `?` inside the application anytime to view the help modal.
 | | `a` / `A` | Change aspect ratio / resolution |
 | | `H` / `Shift + ←` | Rotate Counter Clockwise |
 | | `L` / `Shift + →` | Rotate Clockwise |
+| | `c` | Toggle crop mode |
+| | `Enter` | Confirm crop |
+| | `Esc` | Cancel crop |
 | **File & Presets** | `f` | Toggle file explorer |
 | | `Enter` | Select file / load preset |
 | | `Ctrl+s` | Open export directory picker |
