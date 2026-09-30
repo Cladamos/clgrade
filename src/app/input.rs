@@ -194,19 +194,26 @@ impl App {
                         .is_some()
                     {
                         self.history.push(self.get_snapshot());
+                        // Get unrotated crop area
+                        let unrotated = self.crop_area.unrotate(
+                            self.image_handler.rotation,
+                            self.image_handler.source_size.0,
+                            self.image_handler.source_size.1,
+                        );
+
                         // Create new crop area with using current crop region for allowing multiple crops
                         let new_region = match self.image_handler.crop_region {
                             Some(existing) => CropArea::new(
-                                existing.x + self.crop_area.x,
-                                existing.y + self.crop_area.y,
-                                self.crop_area.width,
-                                self.crop_area.height,
+                                existing.x + unrotated.x,
+                                existing.y + unrotated.y,
+                                unrotated.width,
+                                unrotated.height,
                             ),
                             None => CropArea::new(
-                                self.crop_area.x,
-                                self.crop_area.y,
-                                self.crop_area.width,
-                                self.crop_area.height,
+                                unrotated.x,
+                                unrotated.y,
+                                unrotated.width,
+                                unrotated.height,
                             ),
                         };
                         self.image_handler.crop_region = Some(new_region);
@@ -283,7 +290,8 @@ impl App {
                     self.crop_area = CropArea::default(self.image_handler.source_size);
                     self.is_crop_mode = false;
                     self.is_re_render = true;
-                } else {
+                } else if self.image_handler.protocol.is_some() {
+                    self.crop_area = CropArea::default(self.image_handler.source_size);
                     self.is_crop_mode = true;
                 }
             }
@@ -462,6 +470,7 @@ impl App {
                 self.image_handler
                     .set_rotation(ROTATIONS[self.selected_rotation_index]);
                 self.image_handler.reload();
+                self.crop_area = CropArea::default(self.image_handler.source_size);
             }
             Action::ResetTool => match self.page {
                 ActivePage::Sliders => {

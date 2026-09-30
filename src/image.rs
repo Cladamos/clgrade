@@ -53,9 +53,9 @@ pub struct ImageHandler {
     pub scope_data: ScopeData,
     pub resolution: (u32, u32),
     pub source_size: (u32, u32),
+    pub rotation: Orientation,
 
     path: PathBuf,
-    rotation: Orientation,
     effect_tx: Option<mpsc::Sender<EffectMessage>>,
     protocol_rx: Option<mpsc::Receiver<ProtocolMessage>>,
     picker: Picker,
@@ -140,6 +140,10 @@ impl ImageHandler {
             self.source_size = (crop.width, crop.height);
         }
 
+        if self.rotation == Orientation::Rotate90 || self.rotation == Orientation::Rotate270 {
+            self.source_size = (self.source_size.1, self.source_size.0);
+        }
+
         let (effect_tx, effect_rx) = mpsc::channel::<EffectMessage>();
         let (protocol_tx, protocol_rx) = mpsc::channel::<ProtocolMessage>();
 
@@ -171,12 +175,12 @@ impl ImageHandler {
                 }
             };
             let crop_area = CropArea::default(source_size);
-            if rotation != Orientation::NoTransforms {
-                dyn_img.apply_orientation(rotation);
-            }
             if let Some(crop) = crop_region {
                 let cropped = dyn_img.crop(crop.x, crop.y, crop.width, crop.height);
                 dyn_img = cropped;
+            }
+            if rotation != Orientation::NoTransforms {
+                dyn_img.apply_orientation(rotation);
             }
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
             // thumbnail() preserves aspect ratio so actual size may differ from resolution
@@ -190,10 +194,14 @@ impl ImageHandler {
             } else {
                 None
             };
-            let actual_proxy_size = source_proxy
+
+            let mut actual_proxy_size = source_proxy
                 .as_ref()
                 .map(|p| (p.width(), p.height()))
                 .unwrap_or((0, 0));
+            if rotation == Orientation::Rotate90 || rotation == Orientation::Rotate270 {
+                actual_proxy_size = (actual_proxy_size.1, actual_proxy_size.0);
+            }
             let mut working_proxy = source_proxy.clone();
             let mut working_high = source_high.clone();
 
@@ -405,12 +413,12 @@ impl ImageHandler {
                     .map_err(|e| format!("Failed to open: {e}"))?
                     .decode()
                     .map_err(|e| format!("Failed to decode: {e}"))?;
-                if rotation != Orientation::NoTransforms {
-                    dyn_img.apply_orientation(rotation);
-                }
                 if let Some(crop) = crop_region {
                     let cropped = dyn_img.crop(crop.x, crop.y, crop.width, crop.height);
                     dyn_img = cropped;
+                }
+                if rotation != Orientation::NoTransforms {
+                    dyn_img.apply_orientation(rotation);
                 }
                 let source = dyn_img.to_rgba8();
                 let mut export_image = source.clone();

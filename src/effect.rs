@@ -1,5 +1,5 @@
 use crate::ui::{color_mixer::ColorMixerPart, pipeline::ColorEffects};
-use image::RgbaImage;
+use image::{RgbaImage, metadata::Orientation};
 use rayon::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -80,12 +80,35 @@ impl CropArea {
             max_y: to.1,
         }
     }
-
     pub fn is_cropped(&self, image_size: (u32, u32)) -> Option<&Self> {
         if self.x == 0 && self.y == 0 && self.width == image_size.0 && self.height == image_size.1 {
             None
         } else {
             Some(self)
+        }
+    }
+
+    pub fn unrotate(&self, rotation: Orientation, rotated_width: u32, rotated_height: u32) -> Self {
+        match rotation {
+            Orientation::Rotate90 => CropArea::new(
+                self.y,
+                rotated_width.saturating_sub(self.x + self.width),
+                self.height,
+                self.width,
+            ),
+            Orientation::Rotate180 => CropArea::new(
+                rotated_width.saturating_sub(self.x + self.width),
+                rotated_height.saturating_sub(self.y + self.height),
+                self.width,
+                self.height,
+            ),
+            Orientation::Rotate270 => CropArea::new(
+                rotated_height.saturating_sub(self.y + self.height),
+                self.x,
+                self.height,
+                self.width,
+            ),
+            _ => *self,
         }
     }
 }
