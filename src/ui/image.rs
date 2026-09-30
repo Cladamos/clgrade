@@ -98,10 +98,12 @@ impl<'a> Widget for ImageSection<'a> {
                     String::from("Loading...")
                 } else if self.is_crop_mode {
                     format!(
-                        "Crop [{}]: {}x{} (x:{}, y:{}) | tab: corner",
+                        "Crop [{}]: {}x{} (x:{}, y:{}) | tab: corner | enter: confirm",
                         self.crop_corner.label(),
-                        self.crop_area.width, self.crop_area.height,
-                        self.crop_area.x, self.crop_area.y
+                        self.crop_area.width,
+                        self.crop_area.height,
+                        self.crop_area.x,
+                        self.crop_area.y
                     )
                 } else {
                     String::new()

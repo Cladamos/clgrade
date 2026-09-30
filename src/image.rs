@@ -179,6 +179,8 @@ impl ImageHandler {
                 dyn_img = cropped;
             }
             let source_high = dyn_img.thumbnail(resolution.0, resolution.1).to_rgba8();
+            // thumbnail() preserves aspect ratio so actual size may differ from resolution
+            let actual_high_size = (source_high.width(), source_high.height());
             let source_proxy = if is_proxy_enabled {
                 Some(
                     dyn_img
@@ -188,10 +190,14 @@ impl ImageHandler {
             } else {
                 None
             };
+            let actual_proxy_size = source_proxy
+                .as_ref()
+                .map(|p| (p.width(), p.height()))
+                .unwrap_or((0, 0));
             let mut working_proxy = source_proxy.clone();
             let mut working_high = source_high.clone();
 
-            let preview_crop = crop_area.scaled(source_size, resolution);
+            let preview_crop = crop_area.scaled(source_size, actual_high_size);
             apply_all_effects(
                 &source_high,
                 &mut working_high,
@@ -199,7 +205,7 @@ impl ImageHandler {
                 &wheels,
                 &pipeline,
                 &color_mixer,
-                preview_crop.is_cropped(resolution),
+                preview_crop.is_cropped(actual_high_size),
             );
             let initial_scope =
                 Self::calculate_scopes(&working_high, working_high.width(), working_high.height());
@@ -241,7 +247,8 @@ impl ImageHandler {
                             Err(mpsc::RecvTimeoutError::Timeout) => {
                                 is_dragging = false;
                                 working_high = source_high.clone();
-                                let preview_crop = last_crop_area.scaled(source_size, resolution);
+                                let preview_crop =
+                                    last_crop_area.scaled(source_size, actual_high_size);
                                 apply_all_effects(
                                     &source_high,
                                     &mut working_high,
@@ -249,7 +256,7 @@ impl ImageHandler {
                                     &last_wheels,
                                     &last_pipeline,
                                     &last_color_mixer,
-                                    preview_crop.is_cropped(resolution),
+                                    preview_crop.is_cropped(actual_high_size),
                                 );
 
                                 let scope = Self::calculate_scopes(
@@ -295,8 +302,7 @@ impl ImageHandler {
                 }
 
                 if let (Some(sp), Some(wp)) = (source_proxy.as_ref(), working_proxy.as_mut()) {
-                    let proxy_res = (resolution.0 / 2, resolution.1 / 2);
-                    let proxy_crop = crop_area.scaled(source_size, proxy_res);
+                    let proxy_crop = crop_area.scaled(source_size, actual_proxy_size);
                     apply_all_effects(
                         sp,
                         wp,
@@ -304,7 +310,7 @@ impl ImageHandler {
                         &wheels,
                         &pipeline,
                         &color_mixer,
-                        proxy_crop.is_cropped(proxy_res),
+                        proxy_crop.is_cropped(actual_proxy_size),
                     );
                     let protocol = picker
                         .new_protocol(
