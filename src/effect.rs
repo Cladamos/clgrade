@@ -56,14 +56,22 @@ impl CropArea {
     pub fn adjust(&mut self, delta_x: f64, delta_y: f64, corner: CropCorner) {
         match corner {
             CropCorner::TopLeft => {
-                self.x = ((self.x as f64 + delta_x) as u32).clamp(0, self.max_x);
-                self.y = ((self.y as f64 + delta_y) as u32).clamp(0, self.max_y);
-                self.width = ((self.width as f64 - delta_x) as u32).clamp(10, self.max_x);
-                self.height = ((self.height as f64 - delta_y) as u32).clamp(10, self.max_y);
+                let new_x =
+                    ((self.x as f64 + delta_x) as u32).clamp(0, self.max_x.saturating_sub(10));
+                let new_y =
+                    ((self.y as f64 + delta_y) as u32).clamp(0, self.max_y.saturating_sub(10));
+                self.width =
+                    ((self.width as f64 - delta_x) as u32).clamp(10, self.max_x.saturating_sub(new_x));
+                self.height =
+                    ((self.height as f64 - delta_y) as u32).clamp(10, self.max_y.saturating_sub(new_y));
+                self.x = new_x;
+                self.y = new_y;
             }
             CropCorner::BottomRight => {
-                self.width = ((self.width as f64 + delta_x) as u32).clamp(10, self.max_x);
-                self.height = ((self.height as f64 - delta_y) as u32).clamp(10, self.max_y);
+                self.width = ((self.width as f64 + delta_x) as u32)
+                    .clamp(10, self.max_x.saturating_sub(self.x));
+                self.height = ((self.height as f64 - delta_y) as u32)
+                    .clamp(10, self.max_y.saturating_sub(self.y));
             }
         }
     }
@@ -419,7 +427,7 @@ pub fn apply_all_effects(
         // Lift (Shadows)
         lift_r: (wheel_datas.lift_y + wheel_datas.lift_x) * intensity + wheel_datas.lift_lum,
         lift_g: (wheel_datas.lift_y - wheel_datas.lift_x) * intensity + wheel_datas.lift_lum,
-        lift_b: (wheel_datas.lift_y + wheel_datas.lift_x) * intensity + wheel_datas.lift_lum,
+        lift_b: (-wheel_datas.lift_y + wheel_datas.lift_x) * intensity + wheel_datas.lift_lum,
         // Gamma (Midtones)
         gamma_r: (wheel_datas.gamma_y + wheel_datas.gamma_x) * intensity + wheel_datas.gamma_lum,
         gamma_g: (wheel_datas.gamma_y - wheel_datas.gamma_x) * intensity + wheel_datas.gamma_lum,
